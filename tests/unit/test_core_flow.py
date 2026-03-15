@@ -1,6 +1,72 @@
+from evennia_ai_image_generator.backend.base import ImageGenerationResult
 from evennia_ai_image_generator.backend.placeholder import PlaceholderBackend
 from evennia_ai_image_generator.mixins import SceneImageMixin
 from evennia_ai_image_generator.queue import GenerationQueue, process_generation_job
+
+
+class TxtOnlyBackend(PlaceholderBackend):
+    capabilities = {
+        "txt2img": True,
+        "img2img": False,
+        "multi_reference": False,
+        "inpainting": False,
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_mode = None
+
+    def generate(self, request):
+        self.last_mode = request.mode
+        return super().generate(request)
+
+
+class Img2ImgBackend(PlaceholderBackend):
+    capabilities = {
+        "txt2img": True,
+        "img2img": True,
+        "multi_reference": False,
+        "inpainting": False,
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_mode = None
+
+    def generate(self, request):
+        self.last_mode = request.mode
+        return super().generate(request)
+
+
+class RequestCapturingBackend(PlaceholderBackend):
+    capabilities = {
+        "txt2img": True,
+        "img2img": True,
+        "multi_reference": True,
+        "inpainting": False,
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_request = None
+
+    def generate(self, request):
+        self.last_request = request
+        return ImageGenerationResult(
+            image_path="generated/captured.png",
+            image_url="https://game.test/media/generated/captured.png",
+            seed=None,
+            model_name="capture-v1",
+            generation_time=0.01,
+        )
+
+
+class ReferencedSubject(SceneImageMixin):
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/lantern.png", "role": "object", "caption": "brass lantern"},
+            {"path": "generated/orb.png", "role": "object", "caption": "glowing orb"},
+        ]
 
 
 def test_render_ready_state_includes_image_url() -> None:
@@ -30,3 +96,105 @@ def test_queue_deduplicates_subject_jobs() -> None:
     assert queue.queue_image_generation("room-1") is False
     queue.mark_complete("room-1")
     assert queue.queue_image_generation("room-1") is True
+
+
+def test_process_generation_job_falls_back_to_txt2img_when_img2img_unsupported() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
+    room.queue_for_generation(reason="look")
+    process_generation_job(room, PlaceholderBackend())
+    room.mark_image_stale(reason="updated")
+    room.queue_for_generation(reason="look")
+
+    backend = TxtOnlyBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert backend.last_mode == "txt2img"
+    assert image["mode"] == "txt2img"
+
+
+def test_process_generation_job_uses_img2img_when_supported() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
+    room.queue_for_generation(reason="look")
+    process_generation_job(room, PlaceholderBackend())
+    room.mark_image_stale(reason="updated")
+    room.queue_for_generation(reason="look")
+
+    backend = Img2ImgBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert backend.last_mode == "img2img"
+    assert image["mode"] == "img2img"
+
+
+def test_process_generation_job_loads_backend_from_config() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="square", description="A busy square")
+    room.queue_for_generation(reason="look")
+
+    image = process_generation_job(room, backend_config={"backend": "placeholder"})
+
+    assert image["model_name"] == "placeholder-v1"
+
+
+def test_reference_images_are_passed_when_backend_supports_multi_reference() -> None:
+    room = ReferencedSubject(subject_type="room", subject_key="gallery", description="A curated gallery")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert backend.last_request is not None
+    assert len(backend.last_request.reference_images) == 2
+    assert image["reference_count"] == 2
+    assert image["reference_fallback_used"] is False
+
+
+def test_reference_images_fallback_to_prompt_when_backend_lacks_multi_reference() -> None:
+    room = ReferencedSubject(subject_type="room", subject_key="gallery", description="A curated gallery")
+    room.queue_for_generation(reason="look")
+
+    backend = TxtOnlyBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 0
+    assert image["reference_fallback_used"] is True
+    assert "Reference context:" in image["prompt"]
+    assert "brass lantern" in image["prompt"]
+
+
+class ClutteredReferencedSubject(SceneImageMixin):
+    max_reference_images = 2
+
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/cup.png", "role": "object", "caption": "wooden cup", "weight": 0.1, "notable": False},
+            {"path": "generated/throne.png", "role": "object", "caption": "golden throne", "weight": 0.95, "notable": True},
+            {"path": "generated/banner.png", "role": "object", "caption": "war banner", "weight": 0.7, "notable": True},
+            {"path": "generated/table.png", "role": "object", "caption": "old table", "weight": 0.2, "notable": True},
+        ]
+
+
+def test_non_notable_references_are_excluded_and_limit_applies() -> None:
+    room = ClutteredReferencedSubject(subject_type="room", subject_key="hall", description="A cluttered hall")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 2
+    assert backend.last_request is not None
+    captions = [ref.caption for ref in backend.last_request.reference_images]
+    assert "wooden cup" not in captions
+    assert captions == ["golden throne", "war banner"]
+
+
+def test_non_notable_references_are_excluded_in_prompt_fallback() -> None:
+    room = ClutteredReferencedSubject(subject_type="room", subject_key="hall", description="A cluttered hall")
+    room.queue_for_generation(reason="look")
+
+    image = process_generation_job(room, backend=TxtOnlyBackend())
+
+    assert image["reference_count"] == 0
+    assert image["reference_fallback_used"] is True
+    assert "golden throne" in image["prompt"]
+    assert "war banner" in image["prompt"]
+    assert "wooden cup" not in image["prompt"]

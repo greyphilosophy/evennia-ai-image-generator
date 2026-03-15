@@ -20,6 +20,10 @@ class SceneImageMixin:
     def build_prompt(self) -> str:
         return self.description.strip() or f"A {self.subject_type} in a text MUD"
 
+    def collect_reference_images(self) -> list[dict]:
+        """Return optional reference images for scene generation."""
+        return []
+
     @property
     def image_state(self) -> str:
         return self.lifecycle.state
