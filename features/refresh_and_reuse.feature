@@ -15,6 +15,12 @@ Feature: Refresh and reuse of prior images
     Then reuse or generation evaluation is queued
     And the object is not regenerated synchronously in the caller flow
 
+  Scenario: Main game requests refresh for a disabled subject
+    Given image generation is disabled for the subject
+    When the main game requests image refresh for that subject
+    Then the request is ignored or rejected according to project policy
+    And no backend generation occurs
+
   Scenario: Room refresh reuses a prior image when state matches
     Given image generation is enabled for the room
     And the room image index contains a previously stored state fingerprint
