@@ -234,11 +234,13 @@ def apply_when(world: World, step: str) -> None:
         world.image_history_updated = True
         world.image_index_updated = True
         world.active_job_exists = False
-    elif step in {"the main game marks the room image as stale with reason \"room_updated\"", "the main game requests image refresh for the object with reason \"builder_update\"", "the main game requests image refresh for the object", "the main game requests image refresh for the room", "a refresh evaluation occurs", "a generation request is evaluated"}:
+    elif step in {"the main game marks the room image as stale with reason \"room_updated\"", "the main game requests image refresh for the object with reason \"builder_update\"", "the main game requests image refresh for the object", "the main game requests image refresh for the room", "the main game requests image refresh for that subject", "a refresh evaluation occurs", "a generation request is evaluated"}:
         if "marks" in step:
             world.image_state = "stale"
             world.metadata_reason = "room_updated"
-        if "requests" in step or step == "a refresh evaluation occurs":
+        if step == "the main game requests image refresh for that subject" and not world.image_enabled:
+            world.active_job_exists = False
+        elif "requests" in step or step == "a refresh evaluation occurs":
             if world.reuse_eligible:
                 world.reused_image_reactivated = True
                 world.image_state = "ready"
@@ -337,8 +339,10 @@ def apply_then(world: World, step: str) -> None:
         assert world.image_index_updated
     elif step in {"the previously stored image is reactivated", "the prior image is reactivated", "the current image record points to the reused image"}:
         assert world.reused_image_reactivated
-    elif step in {"no new backend generation occurs", "the object is not regenerated synchronously in the caller flow"}:
+    elif step in {"no backend generation occurs", "no new backend generation occurs", "the object is not regenerated synchronously in the caller flow"}:
         assert not world.active_job_exists or not world.regenerated_sync
+    elif step == "the request is ignored or rejected according to project policy":
+        assert not world.active_job_exists and world.generation_queue_count == 0
     elif step in {"the state fingerprint matches the previously indexed state", "the prior image is eligible for reuse"}:
         assert world.reuse_eligible
     elif step == "the state fingerprint does not match the indexed prior state":
