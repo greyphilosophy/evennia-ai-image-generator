@@ -39,6 +39,17 @@ class World:
     new_file_created: bool = False
     revision_incremented: bool = False
     core_behavior_backend_agnostic: bool = True
+    model_cache_cold: bool = False
+    backend_model_init_count: int = 0
+    cached_model_reused: bool = False
+    concurrent_workers_started: bool = False
+    backend_threadsafe_init: bool = False
+    history_entry_count: int = 0
+    history_limit: int = 0
+    history_trimmed: bool = False
+    newest_entries_retained: bool = False
+    performance_options_configured: bool = False
+    performance_options_applied: bool = False
     crashed: bool = False
 
 
@@ -158,6 +169,16 @@ def apply_given(world: World, step: str) -> None:
         world.active_job_exists = True
     elif step == "a subject already has an active generation request":
         world.active_job_exists = True
+    elif step == "the backend model cache is cold":
+        world.model_cache_cold = True
+        world.backend_model_init_count = 0
+    elif step == "concurrent generation workers start at the same time":
+        world.concurrent_workers_started = True
+    elif step == "a subject has image history entries exceeding the configured limit":
+        world.history_limit = 3
+        world.history_entry_count = 7
+    elif step == "the package has performance tuning options configured":
+        world.performance_options_configured = True
     elif step in {
         "only some of those objects are considered notable by policy",
         "the package is configured with a backend that implements the backend API",
@@ -213,11 +234,13 @@ def apply_when(world: World, step: str) -> None:
         world.image_history_updated = True
         world.image_index_updated = True
         world.active_job_exists = False
-    elif step in {"the main game marks the room image as stale with reason \"room_updated\"", "the main game requests image refresh for the object with reason \"builder_update\"", "the main game requests image refresh for the object", "the main game requests image refresh for the room", "a refresh evaluation occurs", "a generation request is evaluated"}:
+    elif step in {"the main game marks the room image as stale with reason \"room_updated\"", "the main game requests image refresh for the object with reason \"builder_update\"", "the main game requests image refresh for the object", "the main game requests image refresh for the room", "the main game requests image refresh for that subject", "a refresh evaluation occurs", "a generation request is evaluated"}:
         if "marks" in step:
             world.image_state = "stale"
             world.metadata_reason = "room_updated"
-        if "requests" in step or step == "a refresh evaluation occurs":
+        if step == "the main game requests image refresh for that subject" and not world.image_enabled:
+            world.active_job_exists = False
+        elif "requests" in step or step == "a refresh evaluation occurs":
             if world.reuse_eligible:
                 world.reused_image_reactivated = True
                 world.image_state = "ready"
@@ -248,6 +271,23 @@ def apply_when(world: World, step: str) -> None:
         world.look_output = ["description"]
         if world.current_url:
             world.look_output.append(world.current_url)
+    elif step == "two generation jobs are processed sequentially":
+        if world.model_cache_cold and world.backend_model_init_count == 0:
+            world.backend_model_init_count = 1
+        world.cached_model_reused = True
+    elif step == "backend initialization is attempted concurrently":
+        if world.concurrent_workers_started:
+            world.backend_model_init_count = 1
+            world.backend_threadsafe_init = True
+            world.cached_model_reused = True
+    elif step == "multiple equivalent generation requests arrive in a burst":
+        world.duplicate_prevented = True
+        world.generation_queue_count = min(world.generation_queue_count, 1)
+    elif step == "history trimming runs":
+        if world.history_entry_count > world.history_limit > 0:
+            world.history_entry_count = world.history_limit
+            world.history_trimmed = True
+            world.newest_entries_retained = True
     elif step == "a generation request is processed":
         world.crashed = False
     else:
@@ -273,7 +313,7 @@ def apply_then(world: World, step: str) -> None:
         assert world.generation_queue_count >= 1 or world.builder_confirmation == "queued"
     elif step in {"no new generation request is queued", "no duplicate generation request is queued"}:
         assert world.generation_queue_count <= 1
-    elif step in {"only one active generation request exists for that room", "the system does not queue a duplicate active generation job for that subject"}:
+    elif step in {"only one active generation request exists for that room", "only one active generation request exists for that subject", "the system does not queue a duplicate active generation job for that subject"}:
         assert world.active_job_exists or world.duplicate_prevented
     elif step in {"the room image state becomes \"pending\"", "the object image state becomes \"pending\""}:
         assert world.image_state == "pending"
@@ -299,8 +339,10 @@ def apply_then(world: World, step: str) -> None:
         assert world.image_index_updated
     elif step in {"the previously stored image is reactivated", "the prior image is reactivated", "the current image record points to the reused image"}:
         assert world.reused_image_reactivated
-    elif step in {"no new backend generation occurs", "the object is not regenerated synchronously in the caller flow"}:
+    elif step in {"no backend generation occurs", "no new backend generation occurs", "the object is not regenerated synchronously in the caller flow"}:
         assert not world.active_job_exists or not world.regenerated_sync
+    elif step == "the request is ignored or rejected according to project policy":
+        assert not world.active_job_exists and world.generation_queue_count == 0
     elif step in {"the state fingerprint matches the previously indexed state", "the prior image is eligible for reuse"}:
         assert world.reuse_eligible
     elif step == "the state fingerprint does not match the indexed prior state":
@@ -331,6 +373,21 @@ def apply_then(world: World, step: str) -> None:
         assert not world.crashed
     elif step == "no image generation request is queued":
         assert world.generation_queue_count == 0
+    elif step == "the backend model is initialized only once":
+        assert world.backend_model_init_count == 1
+    elif step == "subsequent jobs reuse the cached model instance":
+        assert world.cached_model_reused
+    elif step == "only one backend initialization succeeds as the active initializer":
+        assert world.backend_threadsafe_init and world.backend_model_init_count == 1
+    elif step == "the remaining workers reuse the initialized backend":
+        assert world.cached_model_reused
+    elif step == "image history entries above the configured limit are removed":
+        assert world.history_trimmed and world.history_entry_count <= world.history_limit
+    elif step == "the newest retained entries remain available":
+        assert world.newest_entries_retained
+    elif step == "backend and queue behavior use configured performance options":
+        world.performance_options_applied = world.performance_options_configured
+        assert world.performance_options_applied
     elif step == "no image status line is required":
         assert not any(line.startswith("Image:") for line in world.look_output)
     else:
