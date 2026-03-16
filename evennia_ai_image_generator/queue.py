@@ -13,12 +13,40 @@ from .prompts import compute_prompt_fingerprint
 EnqueueStatus = Literal["queued", "duplicate", "full"]
 
 
+def build_generation_queue(config: dict[str, Any] | None = None) -> "GenerationQueue":
+    """Build a queue from lightweight configuration.
+
+    Supported options:
+
+    - ``None`` / ``{}``: unbounded queue.
+    - ``{"max_pending": <int | None>}``: limit outstanding subject keys.
+    """
+
+    if config is None:
+        config = {}
+    elif not isinstance(config, dict):
+        raise ValueError("Queue configuration must be a dictionary")
+
+    unknown_options = set(config) - {"max_pending"}
+    if unknown_options:
+        names = ", ".join(sorted(unknown_options))
+        raise ValueError(f"Unknown queue option(s): {names}")
+
+    max_pending = config.get("max_pending")
+    if isinstance(max_pending, bool) or (max_pending is not None and not isinstance(max_pending, int)):
+        raise ValueError("Queue option 'max_pending' must be an integer or None")
+
+    return GenerationQueue(max_pending=max_pending)
+
+
 @dataclass
 class GenerationQueue:
     pending: set[str]
     max_pending: int | None
 
     def __init__(self, max_pending: int | None = None) -> None:
+        if isinstance(max_pending, bool):
+            raise ValueError("max_pending must be an integer and cannot be a boolean")
         if max_pending is not None and max_pending < 1:
             raise ValueError("max_pending must be at least 1 when provided")
         self.pending = set()

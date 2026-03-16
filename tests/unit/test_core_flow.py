@@ -1,7 +1,7 @@
 from evennia_ai_image_generator.backend.base import ImageGenerationResult
 from evennia_ai_image_generator.backend.placeholder import PlaceholderBackend
 from evennia_ai_image_generator.mixins import SceneImageMixin
-from evennia_ai_image_generator.queue import GenerationQueue, process_generation_job
+from evennia_ai_image_generator.queue import GenerationQueue, build_generation_queue, process_generation_job
 
 
 class TxtOnlyBackend(PlaceholderBackend):
@@ -132,6 +132,16 @@ def test_queue_introspection_helpers_reflect_state() -> None:
     assert queue.is_queued("room-1") is False
 
 
+
+
+def test_queue_rejects_boolean_max_pending_value() -> None:
+    for invalid in (True, False):
+        try:
+            GenerationQueue(max_pending=invalid)
+        except ValueError as err:
+            assert "boolean" in str(err)
+        else:
+            raise AssertionError("Expected ValueError for boolean max_pending")
 def test_queue_rejects_invalid_max_pending_value() -> None:
     try:
         GenerationQueue(max_pending=0)
@@ -306,3 +316,49 @@ def test_txt2img_fallback_includes_continuity_hint_when_prior_image_exists() -> 
     assert image["reference_fallback_used"] is False
     assert image["continuity_fallback_used"] is True
     assert "Continuity/style hint" in image["prompt"]
+
+
+
+def test_build_generation_queue_defaults_to_unbounded_queue() -> None:
+    queue = build_generation_queue()
+
+    assert queue.max_pending is None
+
+
+def test_build_generation_queue_applies_max_pending_limit() -> None:
+    queue = build_generation_queue({"max_pending": 2})
+
+    assert queue.max_pending == 2
+    assert queue.enqueue_with_status("room-1") == "queued"
+    assert queue.enqueue_with_status("room-2") == "queued"
+    assert queue.enqueue_with_status("room-3") == "full"
+
+
+def test_build_generation_queue_rejects_invalid_config_shapes() -> None:
+    for invalid in ([], "x", 1):
+        try:
+            build_generation_queue(invalid)  # type: ignore[arg-type]
+        except ValueError as err:
+            assert "configuration" in str(err).lower()
+        else:
+            raise AssertionError("Expected ValueError for non-dict queue config")
+
+
+def test_build_generation_queue_rejects_invalid_max_pending_type() -> None:
+    for invalid in ("2", 1.5, object(), True, False):
+        try:
+            build_generation_queue({"max_pending": invalid})
+        except ValueError as err:
+            assert "max_pending" in str(err)
+        else:
+            raise AssertionError("Expected ValueError for invalid max_pending type")
+
+
+def test_build_generation_queue_rejects_unknown_options() -> None:
+    try:
+        build_generation_queue({"max_pending": 2, "burst_limit": 10})
+    except ValueError as err:
+        assert "Unknown queue option" in str(err)
+        assert "burst_limit" in str(err)
+    else:
+        raise AssertionError("Expected ValueError for unknown queue option")
