@@ -137,7 +137,12 @@ Suggested structure:
     "negative_prompt": "blurry, distorted, extra limbs",
     "seed": 123456789,
     "model_name": "sdxl-base-1.0",
+    "generation_time": 3.42,
     "backend_name": "diffusers",
+    "backend_metadata": {
+        "scheduler": "EulerAncestralDiscreteScheduler",
+        "num_inference_steps": 30
+    },
     "mode": "img2img",
     "source_refs": [
         {"type": "continuity", "image_id": "room_76_0003"},

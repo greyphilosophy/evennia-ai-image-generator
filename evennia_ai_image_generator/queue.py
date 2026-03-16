@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Literal
 
@@ -230,10 +231,14 @@ def process_generation_job(
         "state_fingerprint": fingerprint,
         "prompt": build.request.prompt,
         "model_name": result.model_name,
+        "seed": result.seed,
+        "generation_time": result.generation_time,
+        "backend_metadata": dict(result.metadata),
         "mode": build.request.mode,
         "reference_count": len(build.request.reference_images),
         "reference_fallback_used": build.reference_fallback_used,
         "continuity_fallback_used": build.continuity_fallback_used,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     subject.lifecycle.set_ready(image_record)
     return image_record
