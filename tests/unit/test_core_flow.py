@@ -72,6 +72,24 @@ class ModelLoadFailingBackend(PlaceholderBackend):
         raise ModelLoadError("failed to load model")
 
 
+class MetadataCapturingBackend(PlaceholderBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.source_metadata = {"mode": "txt2img", "sampler": "euler"}
+
+    def generate(self, request):
+        return ImageGenerationResult(
+            image_path="generated/metadata.png",
+            image_url="https://game.test/media/generated/metadata.png",
+            seed=42,
+            model_name="metadata-v1",
+            generation_time=0.25,
+            metadata=self.source_metadata,
+        )
+
+
+
+
 class ReferencedSubject(SceneImageMixin):
     def collect_reference_images(self):
         return [
@@ -88,6 +106,10 @@ def test_render_ready_state_includes_image_url() -> None:
     output = room.render_look()
 
     assert room.image_state == "ready"
+    assert room.image_current is not None
+    assert room.image_current["created_at"]
+    assert isinstance(room.image_current["generation_time"], float)
+    assert room.image_current["backend_metadata"]["mode"] == "txt2img"
     assert "Image: https://game.test/media/generated" in output
 
 
@@ -246,6 +268,34 @@ def test_process_generation_job_loads_backend_from_config() -> None:
     image = process_generation_job(room, backend_config={"backend": "placeholder"})
 
     assert image["model_name"] == "placeholder-v1"
+    assert image["seed"] is None
+    assert image["backend_metadata"]["mode"] == "txt2img"
+
+
+def test_process_generation_job_records_created_at_as_iso_utc_timestamp() -> None:
+    from datetime import datetime
+
+    room = SceneImageMixin(subject_type="room", subject_key="clocktower", description="A silent clocktower")
+    room.queue_for_generation(reason="look")
+
+    image = process_generation_job(room, backend=PlaceholderBackend())
+
+    parsed = datetime.fromisoformat(image["created_at"])
+    assert parsed.tzinfo is not None
+
+
+def test_process_generation_job_copies_backend_metadata() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="lab", description="An alchemist lab")
+    room.queue_for_generation(reason="look")
+    backend = MetadataCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+    backend.source_metadata["mode"] = "mutated"
+
+    assert image["seed"] == 42
+    assert image["generation_time"] == 0.25
+    assert image["backend_metadata"]["mode"] == "txt2img"
+    assert image["backend_metadata"]["sampler"] == "euler"
 
 
 def test_reference_images_are_passed_when_backend_supports_multi_reference() -> None:
