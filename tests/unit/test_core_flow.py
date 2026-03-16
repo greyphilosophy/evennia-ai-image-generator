@@ -318,6 +318,52 @@ def test_txt2img_fallback_includes_continuity_hint_when_prior_image_exists() -> 
     assert "Continuity/style hint" in image["prompt"]
 
 
+def test_img2img_includes_continuity_reference_when_supported() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
+    room.queue_for_generation(reason="look")
+    process_generation_job(room, PlaceholderBackend())
+    room.mark_image_stale(reason="updated")
+    room.queue_for_generation(reason="look")
+
+    backend = RequestCapturingBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert backend.last_request is not None
+    assert image["mode"] == "img2img"
+    assert image["continuity_fallback_used"] is False
+    assert image["reference_count"] == 1
+    assert backend.last_request.reference_images[0].role == "continuity"
+    assert backend.last_request.reference_images[0].path == room.lifecycle.image_history[0]["path"]
+
+
+class SubjectWithContinuityInReferences(SceneImageMixin):
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/room_forest_seed.png", "role": "continuity", "caption": "existing continuity"},
+        ]
+
+
+def test_img2img_does_not_duplicate_existing_continuity_reference() -> None:
+    room = SubjectWithContinuityInReferences(subject_type="room", subject_key="forest", description="A dark forest")
+    room.queue_for_generation(reason="look")
+    first = process_generation_job(room, PlaceholderBackend())
+    room.mark_image_stale(reason="updated")
+    room.queue_for_generation(reason="look")
+
+    # Match subject-provided continuity reference path to current image path.
+    room.collect_reference_images = lambda: [
+        {"path": first["path"], "role": "continuity", "caption": "existing continuity"}
+    ]
+
+    backend = RequestCapturingBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert backend.last_request is not None
+    assert image["mode"] == "img2img"
+    continuity_refs = [ref for ref in backend.last_request.reference_images if ref.role == "continuity"]
+    assert len(continuity_refs) == 1
+
+
 
 def test_build_generation_queue_defaults_to_unbounded_queue() -> None:
     queue = build_generation_queue()
