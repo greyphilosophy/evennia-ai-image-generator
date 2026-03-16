@@ -49,9 +49,15 @@ When viewed through Discord, the image link is automatically embedded.
 
 # Installation
 
-```
-pip install evennia-ai-image-generator
-```
+`evennia-ai-image-generator` is not currently published on PyPI as an installable wheel/sdist,
+so `pip install evennia-ai-image-generator` will fail.
+
+For now, install from source by vendoring the package into your Evennia project:
+
+1. Copy the `evennia_ai_image_generator/` folder from this repository into your game codebase
+   (or otherwise make it importable on your `PYTHONPATH`).
+2. Add the package to your Evennia settings.
+3. Run migrations.
 
 Add the package to your Evennia settings:
 
@@ -67,6 +73,12 @@ from evennia import DefaultRoom
 
 class Room(SceneImageMixin, DefaultRoom):
     pass
+```
+
+Run migrations if needed:
+
+```bash
+evennia migrate
 ```
 
 ---
