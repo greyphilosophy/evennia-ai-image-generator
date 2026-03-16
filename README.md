@@ -49,11 +49,48 @@ When viewed through Discord, the image link is automatically embedded.
 
 # Installation
 
-```
-pip install evennia-ai-image-generator
+`evennia-ai-image-generator` is not currently published on PyPI as an installable wheel/sdist,
+so `pip install evennia-ai-image-generator` will fail.
+
+## Practical install for an Evennia project at `C:\MUD\aicompany_mud`
+
+You have two good options on Windows.
+
+### Option A (recommended): clone the repo next to your game and add it to `PYTHONPATH`
+
+From PowerShell:
+
+```powershell
+cd C:\MUD
+git clone <this-repo-url> evennia-ai-image-generator
 ```
 
-Add the package to your Evennia settings:
+Then in your Evennia launcher/session environment, ensure Python can import that folder.
+For example, in PowerShell before launching Evennia:
+
+```powershell
+$env:PYTHONPATH = "C:\MUD\evennia-ai-image-generator;" + $env:PYTHONPATH
+```
+
+### Option B: vendor directly into your game repo
+
+Copy only the package directory into your game project:
+
+```text
+from: C:\MUD\evennia-ai-image-generator\evennia_ai_image_generator
+to:   C:\MUD\aicompany_mud\evennia_ai_image_generator
+```
+
+This avoids `PYTHONPATH` changes but means you must recopy updates when this repo changes.
+
+After either option:
+
+1. Edit your game settings file: `C:\MUD\aicompany_mud\server\conf\settings.py`
+   (equivalently `<your-evennia-game>\server\conf\settings.py`).
+2. Add the package to `INSTALLED_APPS`.
+3. Run migrations.
+
+In `server/conf/settings.py`:
 
 ```python
 INSTALLED_APPS += ["evennia_ai_image_generator"]
@@ -67,6 +104,12 @@ from evennia import DefaultRoom
 
 class Room(SceneImageMixin, DefaultRoom):
     pass
+```
+
+Run migrations if needed:
+
+```bash
+evennia migrate
 ```
 
 ---
