@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha1
+from threading import Lock
 from typing import Any
 
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ReferenceImage
@@ -14,16 +15,19 @@ class GenerationQueue:
 
     def __init__(self) -> None:
         self.pending = set()
+        self._lock = Lock()
 
     def queue_image_generation(self, subject_key: str) -> bool:
         """Return True when queued, False if duplicate."""
-        if subject_key in self.pending:
-            return False
-        self.pending.add(subject_key)
-        return True
+        with self._lock:
+            if subject_key in self.pending:
+                return False
+            self.pending.add(subject_key)
+            return True
 
     def mark_complete(self, subject_key: str) -> None:
-        self.pending.discard(subject_key)
+        with self._lock:
+            self.pending.discard(subject_key)
 
 
 def _select_mode(subject, backend: BaseImageBackend) -> str:
