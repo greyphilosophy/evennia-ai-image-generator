@@ -52,25 +52,12 @@ When viewed through Discord, the image link is automatically embedded.
 `evennia-ai-image-generator` is not currently published on PyPI as an installable wheel/sdist,
 so `pip install evennia-ai-image-generator` will fail.
 
-## Practical install for an Evennia project at `C:\MUD\aicompany_mud`
+For now, install from source by vendoring the package into your Evennia project:
 
-You have two good options on Windows.
-
-### Option A (recommended): clone the repo next to your game and add it to `PYTHONPATH`
-
-From PowerShell:
-
-```powershell
-cd C:\MUD
-git clone <this-repo-url> evennia-ai-image-generator
-```
-
-Then in your Evennia launcher/session environment, ensure Python can import that folder.
-For example, in PowerShell before launching Evennia:
-
-```powershell
-$env:PYTHONPATH = "C:\MUD\evennia-ai-image-generator;" + $env:PYTHONPATH
-```
+1. Copy the `evennia_ai_image_generator/` folder from this repository into your game codebase
+   (or otherwise make it importable on your `PYTHONPATH`).
+2. Add the package to your Evennia settings.
+3. Run migrations.
 
 ### Option B: vendor directly into your game repo
 
