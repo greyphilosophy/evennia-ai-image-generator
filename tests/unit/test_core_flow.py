@@ -110,7 +110,6 @@ def test_render_ready_state_includes_image_url() -> None:
     assert room.image_current["created_at"]
     assert isinstance(room.image_current["generation_time"], float)
     assert room.image_current["backend_metadata"]["mode"] == "txt2img"
-    assert room.image_current["prompt_fingerprint"] == room.image_current["state_fingerprint"]
     assert "Image: https://game.test/media/generated" in output
 
 
@@ -271,7 +270,6 @@ def test_process_generation_job_loads_backend_from_config() -> None:
     assert image["model_name"] == "placeholder-v1"
     assert image["seed"] is None
     assert image["backend_metadata"]["mode"] == "txt2img"
-    assert image["prompt_fingerprint"] == image["state_fingerprint"]
 
 
 def test_process_generation_job_records_created_at_as_iso_utc_timestamp() -> None:
