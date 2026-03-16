@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha1
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from time import perf_counter
 from typing import Any
 
@@ -37,6 +37,7 @@ class DiffusersBackend(BaseImageBackend):
     }
 
     _shared_bundle_cache: dict[tuple[str, str, str, str | None, bool], _PipelineBundle] = {}
+    _inflight_loads: dict[tuple[str, str, str, str | None, bool], Event] = {}
     _cache_lock = Lock()
 
     def __init__(
@@ -78,6 +79,8 @@ class DiffusersBackend(BaseImageBackend):
             return self._bundle
 
         cache_key = self._cache_key()
+        waiter: Event | None = None
+        is_loader = False
 
         with self._cache_lock:
             cached_bundle = self._shared_bundle_cache.get(cache_key)
@@ -85,39 +88,60 @@ class DiffusersBackend(BaseImageBackend):
                 self._bundle = cached_bundle
                 return cached_bundle
 
+            waiter = self._inflight_loads.get(cache_key)
+            if waiter is None:
+                waiter = Event()
+                self._inflight_loads[cache_key] = waiter
+                is_loader = True
+
+        if not is_loader:
+            waiter.wait()
+            with self._cache_lock:
+                cached_bundle = self._shared_bundle_cache.get(cache_key)
+                if cached_bundle is not None:
+                    self._bundle = cached_bundle
+                    return cached_bundle
+            raise RuntimeError("Backend model initialization did not produce a cached pipeline")
+
         try:
-            import torch
-            from diffusers import StableDiffusionPipeline
-        except Exception as err:  # pragma: no cover - depends on environment
-            raise DiffusersBackendDependencyError(
-                "Diffusers backend requires `diffusers` and `torch` to be installed"
-            ) from err
+            try:
+                import torch
+                from diffusers import StableDiffusionPipeline
+            except Exception as err:  # pragma: no cover - depends on environment
+                raise DiffusersBackendDependencyError(
+                    "Diffusers backend requires `diffusers` and `torch` to be installed"
+                ) from err
 
-        dtype = getattr(torch, self.torch_dtype, None)
-        if dtype is None:
-            raise ValueError(f"Unknown torch dtype: {self.torch_dtype}")
+            dtype = getattr(torch, self.torch_dtype, None)
+            if dtype is None:
+                raise ValueError(f"Unknown torch dtype: {self.torch_dtype}")
 
-        kwargs = {
-            "pretrained_model_name_or_path": self.model_id,
-            "torch_dtype": dtype,
-            "use_safetensors": self.use_safetensors,
-        }
-        if self.revision:
-            kwargs["revision"] = self.revision
+            kwargs = {
+                "pretrained_model_name_or_path": self.model_id,
+                "torch_dtype": dtype,
+                "use_safetensors": self.use_safetensors,
+            }
+            if self.revision:
+                kwargs["revision"] = self.revision
 
-        pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
-        pipeline = pipeline.to(self.device)
-        bundle = _PipelineBundle(pipeline=pipeline, device=self.device)
+            pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
+            pipeline = pipeline.to(self.device)
+            bundle = _PipelineBundle(pipeline=pipeline, device=self.device)
 
-        with self._cache_lock:
-            existing = self._shared_bundle_cache.get(cache_key)
-            if existing is not None:
-                self._bundle = existing
-                return existing
+            with self._cache_lock:
+                existing = self._shared_bundle_cache.get(cache_key)
+                if existing is not None:
+                    self._bundle = existing
+                    return existing
 
-            self._shared_bundle_cache[cache_key] = bundle
-            self._bundle = bundle
-            return bundle
+                self._shared_bundle_cache[cache_key] = bundle
+                self._bundle = bundle
+                return bundle
+        finally:
+            with self._cache_lock:
+                inflight = self._inflight_loads.pop(cache_key, None)
+                if inflight is not None:
+                    inflight.set()
 
     def _build_paths(self, request: ImageGenerationRequest) -> tuple[str, str]:
         digest_input = (
