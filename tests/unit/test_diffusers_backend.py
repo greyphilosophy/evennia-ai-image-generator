@@ -1,3 +1,6 @@
+import sys
+import types
+
 from evennia_ai_image_generator.backend.base import ImageGenerationRequest
 from evennia_ai_image_generator.backend.diffusers_backend import DiffusersBackend
 
@@ -33,3 +36,32 @@ def test_diffusers_backend_defaults_to_sd15_model() -> None:
     backend = DiffusersBackend(dry_run=True)
 
     assert backend.model_id == "runwayml/stable-diffusion-v1-5"
+
+
+def test_diffusers_backend_reuses_shared_pipeline_bundle(monkeypatch) -> None:
+    class _FakePipeline:
+        def to(self, device):
+            return self
+
+    class _FakeStableDiffusionPipeline:
+        load_calls = 0
+
+        @classmethod
+        def from_pretrained(cls, **kwargs):
+            cls.load_calls += 1
+            return _FakePipeline()
+
+    fake_torch = types.SimpleNamespace(float32="float32")
+    fake_diffusers = types.SimpleNamespace(StableDiffusionPipeline=_FakeStableDiffusionPipeline)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+
+    DiffusersBackend._shared_bundle_cache.clear()
+    backend_one = DiffusersBackend(dry_run=False)
+    backend_two = DiffusersBackend(dry_run=False)
+
+    bundle_one = backend_one._load_bundle()
+    bundle_two = backend_two._load_bundle()
+
+    assert bundle_one is bundle_two
+    assert _FakeStableDiffusionPipeline.load_calls == 1
