@@ -8,7 +8,7 @@ from typing import Any, Literal
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ReferenceImage
 from .backend.loader import load_backend
 from .errors import ImageGenerationError
-from .prompts import compute_prompt_fingerprint
+from .prompts import compute_prompt_fingerprint, compute_state_fingerprint
 
 
 
@@ -221,14 +221,16 @@ def process_generation_job(
             subject.lifecycle.set_failed(str(err))
         raise ImageGenerationError(f"Image generation failed for {subject.subject_type}:{subject.subject_key}") from err
 
-    fingerprint = compute_prompt_fingerprint(build.request.prompt)
+    prompt_fingerprint = compute_prompt_fingerprint(build.request.prompt)
+    state_fingerprint = compute_state_fingerprint(build.request.prompt)
     revision = len(subject.lifecycle.image_history) + 1
     image_record = {
         "image_id": f"{subject.subject_type}_{subject.subject_key}_{revision:04d}",
         "path": result.image_path,
         "url": result.image_url,
         "revision": revision,
-        "state_fingerprint": fingerprint,
+        "state_fingerprint": state_fingerprint,
+        "prompt_fingerprint": prompt_fingerprint,
         "prompt": build.request.prompt,
         "model_name": result.model_name,
         "seed": result.seed,

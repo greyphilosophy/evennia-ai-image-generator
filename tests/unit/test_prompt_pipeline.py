@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from evennia_ai_image_generator.context import collect_subject_context
 from evennia_ai_image_generator.mixins import SceneImageMixin
-from evennia_ai_image_generator.prompts import build_prompt, compute_prompt_fingerprint
+from evennia_ai_image_generator.prompts import build_prompt, compute_prompt_fingerprint, compute_state_fingerprint
 
 
 @dataclass
@@ -63,3 +63,9 @@ def test_collect_subject_context_accepts_string_tags() -> None:
 
     assert context["style_tags"] == ["watercolor"]
     assert context["mood_tags"] == ["brooding"]
+
+
+def test_compute_state_fingerprint_matches_prompt_fingerprint() -> None:
+    prompt = "A quiet observatory\nstyle: noir"
+
+    assert compute_state_fingerprint(prompt) == compute_prompt_fingerprint(prompt)
