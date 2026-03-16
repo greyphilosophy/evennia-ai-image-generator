@@ -122,6 +122,25 @@ def test_none_state_queues_and_shows_generating() -> None:
     assert "Image: generating..." in room.render_look()
 
 
+def test_mixin_rejects_invalid_max_image_history_values() -> None:
+    for invalid in (True, False, 1.5, "3"):
+        try:
+            SceneImageMixin(max_image_history=invalid)
+        except ValueError as err:
+            assert "max_image_history" in str(err)
+        else:
+            raise AssertionError("Expected ValueError for invalid max_image_history")
+
+
+def test_mixin_rejects_negative_max_image_history() -> None:
+    try:
+        SceneImageMixin(max_image_history=-1)
+    except ValueError as err:
+        assert "0 or greater" in str(err)
+    else:
+        raise AssertionError("Expected ValueError for negative max_image_history")
+
+
 def test_queue_deduplicates_subject_jobs() -> None:
     queue = GenerationQueue()
 

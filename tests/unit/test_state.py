@@ -71,3 +71,9 @@ def test_trim_history_zero_limit_clears_index_even_with_current_image() -> None:
     assert removed == 2
     assert lifecycle.image_history == []
     assert lifecycle.image_index == {}
+
+
+@pytest.mark.parametrize("invalid", [True, False, 1.5, "3", -1])
+def test_lifecycle_rejects_invalid_max_history_values(invalid) -> None:
+    with pytest.raises(ValueError, match="max_history"):
+        ImageLifecycle(max_history=invalid)

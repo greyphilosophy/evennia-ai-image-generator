@@ -6,6 +6,7 @@ from typing import Any
 from .backend.base import BaseImageBackend
 from .backend.loader import load_backend
 from .queue import GenerationQueue, build_generation_queue
+from .state import validate_max_image_history_limit
 
 
 @dataclass(frozen=True)
@@ -37,13 +38,10 @@ def build_runtime_services(config: dict[str, Any] | None = None) -> RuntimeServi
         names = ", ".join(sorted(unknown_options))
         raise ValueError(f"Unknown runtime option(s): {names}")
 
-    max_image_history = config.get("max_image_history")
-    if isinstance(max_image_history, bool) or (
-        max_image_history is not None and not isinstance(max_image_history, int)
-    ):
-        raise ValueError("Runtime option 'max_image_history' must be an integer or None")
-    if isinstance(max_image_history, int) and max_image_history < 0:
-        raise ValueError("Runtime option 'max_image_history' must be 0 or greater")
+    max_image_history = validate_max_image_history_limit(
+        config.get("max_image_history"),
+        option_name="Runtime option 'max_image_history'",
+    )
 
     backend_config = config.get("backend")
     queue_config = config.get("queue")
