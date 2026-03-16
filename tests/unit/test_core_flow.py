@@ -1,5 +1,6 @@
 from evennia_ai_image_generator.backend.base import ImageGenerationResult
 from evennia_ai_image_generator.backend.placeholder import PlaceholderBackend
+from evennia_ai_image_generator.errors import ImageGenerationError, ModelLoadError
 from evennia_ai_image_generator.mixins import SceneImageMixin
 from evennia_ai_image_generator.queue import GenerationQueue, build_generation_queue, process_generation_job
 
@@ -59,6 +60,16 @@ class RequestCapturingBackend(PlaceholderBackend):
             model_name="capture-v1",
             generation_time=0.01,
         )
+
+
+class FailingBackend(PlaceholderBackend):
+    def generate(self, request):
+        raise RuntimeError("backend exploded")
+
+
+class ModelLoadFailingBackend(PlaceholderBackend):
+    def generate(self, request):
+        raise ModelLoadError("failed to load model")
 
 
 class ReferencedSubject(SceneImageMixin):
@@ -165,6 +176,40 @@ def test_queue_deduplicates_under_concurrency() -> None:
         results = list(pool.map(lambda _: attempt(), range(32)))
 
     assert sum(results) == 1
+
+
+
+def test_process_generation_job_marks_failed_and_wraps_error() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="forge", description="A hot forge")
+    room.queue_for_generation(reason="look")
+
+    try:
+        process_generation_job(room, backend=FailingBackend())
+    except ImageGenerationError as err:
+        assert "forge" in str(err)
+        assert isinstance(err.__cause__, RuntimeError)
+    else:
+        raise AssertionError("Expected ImageGenerationError")
+
+    assert room.image_state == "failed"
+    assert room.lifecycle.image_generation["status"] == "failed"
+    assert "backend exploded" in room.lifecycle.image_generation["error"]
+
+
+def test_process_generation_job_preserves_image_generation_error_subclasses() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="vault", description="An iron vault")
+    room.queue_for_generation(reason="look")
+
+    try:
+        process_generation_job(room, backend=ModelLoadFailingBackend())
+    except ModelLoadError as err:
+        assert "failed to load model" in str(err)
+    else:
+        raise AssertionError("Expected ModelLoadError")
+
+    assert room.image_state == "failed"
+    assert room.lifecycle.image_generation["status"] == "failed"
+    assert room.lifecycle.image_generation["error"] == "image generation failed"
 
 def test_process_generation_job_falls_back_to_txt2img_when_img2img_unsupported() -> None:
     room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")

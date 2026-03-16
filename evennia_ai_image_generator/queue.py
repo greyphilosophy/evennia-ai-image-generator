@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ReferenceImage
 from .backend.loader import load_backend
+from .errors import ImageGenerationError
 from .prompts import compute_prompt_fingerprint
 
 
@@ -207,8 +208,18 @@ def process_generation_job(
     If no backend instance is provided, one is loaded using `backend_config`.
     """
     backend_instance = backend or load_backend(backend_config)
-    build = _build_request(subject, backend_instance)
-    result = backend_instance.generate(build.request)
+    try:
+        build = _build_request(subject, backend_instance)
+        result = backend_instance.generate(build.request)
+    except ImageGenerationError:
+        if getattr(subject.lifecycle, "state", None) == "pending":
+            subject.lifecycle.set_failed("image generation failed")
+        raise
+    except Exception as err:
+        if getattr(subject.lifecycle, "state", None) == "pending":
+            subject.lifecycle.set_failed(str(err))
+        raise ImageGenerationError(f"Image generation failed for {subject.subject_type}:{subject.subject_key}") from err
+
     fingerprint = compute_prompt_fingerprint(build.request.prompt)
     revision = len(subject.lifecycle.image_history) + 1
     image_record = {

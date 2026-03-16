@@ -2,6 +2,7 @@
 
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ImageGenerationResult, ReferenceImage
 from .backend.loader import BackendConfigurationError, load_backend
+from .errors import ImageGenerationError, ModelLoadError
 from .backend.diffusers_backend import DiffusersBackend
 from .backend.placeholder import PlaceholderBackend
 from .mixins import SceneImageMixin
@@ -20,6 +21,8 @@ __all__ = [
     "PlaceholderBackend",
     "DiffusersBackend",
     "BackendConfigurationError",
+    "ImageGenerationError",
+    "ModelLoadError",
     "load_backend",
     "ReferenceImage",
     "SceneImageMixin",
