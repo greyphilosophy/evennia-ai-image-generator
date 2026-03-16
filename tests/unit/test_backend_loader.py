@@ -85,3 +85,9 @@ def test_load_backend_requires_string_backend_name() -> None:
 def test_load_backend_treats_none_options_as_empty_dict() -> None:
     backend = load_backend({"backend": "placeholder", "options": None})
     assert isinstance(backend, PlaceholderBackend)
+
+
+def test_load_backend_supports_diffusers_shorthand() -> None:
+    backend = load_backend({"backend": "diffusers", "options": {"dry_run": True}})
+    assert backend.__class__.__name__ == "DiffusersBackend"
+

@@ -107,6 +107,52 @@ External workflow-based generation server.
 
 Additional backends can be added by implementing the backend API.
 
+
+### Diffusers test setup
+
+You can use the built-in diffusers backend:
+
+```python
+IMAGE_BACKEND = {
+    "backend": "diffusers",
+    "options": {
+        "model_id": "runwayml/stable-diffusion-v1-5",
+        "device": "cpu",
+        "dry_run": True,
+    },
+}
+```
+
+Recommended open-source models:
+
+* `runwayml/stable-diffusion-v1-5` (default recommendation; strong quality/speed tradeoff for SD1.5)
+* `hf-internal-testing/tiny-stable-diffusion-pipe` (very small, ideal for CI/tests only)
+
+Default backend target is SD1.5 (`runwayml/stable-diffusion-v1-5`). For CI or smoke tests, temporarily switch to the tiny model with `dry_run=True`.
+
+### Multimodal LLMs vs Diffusion backends
+
+Short answer: multimodal LLMs are useful here, but mostly for *analysis/planning* rather than final image synthesis.
+
+- Multimodal LLMs (vision-language models) are excellent for:
+  - generating/refining prompts
+  - inspecting generated images for consistency
+  - selecting notable objects/context from room state
+- Diffusion/image-generation models are still the most practical local option for producing final PNG outputs.
+
+Recommended hybrid approach:
+
+1. Keep diffusion as the image renderer (`backend: "diffusers"`).
+2. Optionally add an LLM pre-step to build better prompts/context.
+3. Use `runwayml/stable-diffusion-v1-5` as the primary renderer.
+4. Use `hf-internal-testing/tiny-stable-diffusion-pipe` only for fast CI wiring checks.
+
+Important nuance: `img2txt -> txt2img` is **not** equivalent to true `img2img`.
+
+- `img2txt` compresses an image into text and loses geometry, texture, and latent detail.
+- true `img2img` conditions directly on image pixels/latents, preserving composition and style much better.
+- this package now applies an explicit continuity/style text hint fallback when a subject has a prior image but the backend lacks `img2img`.
+
 ---
 
 # Regeneration Control

@@ -68,16 +68,31 @@ def _reference_text(references: list[ReferenceImage]) -> str:
     return "Reference context: " + ", ".join(labels)
 
 
-def _build_request(subject, backend: BaseImageBackend) -> tuple[ImageGenerationRequest, bool]:
+def _continuity_text(subject) -> str:
+    current = getattr(subject.lifecycle, "image_current", None) or {}
+    previous_prompt = current.get("prompt")
+    if previous_prompt:
+        return f"Continuity/style hint from prior scene: {previous_prompt}"
+    return "Continuity/style hint: keep composition and palette consistent with prior version."
+
+
+def _build_request(subject, backend: BaseImageBackend) -> tuple[ImageGenerationRequest, bool, bool]:
     references = _normalize_reference_images(subject)
     supports_multi_reference = backend.capabilities.get("multi_reference", False)
+    supports_img2img = backend.capabilities.get("img2img", False)
+    has_prior_image = bool(getattr(subject.lifecycle, "image_current", None))
     prompt = subject.build_prompt()
     reference_fallback_used = False
+    continuity_fallback_used = False
 
     if references and not supports_multi_reference:
         prompt = f"{prompt}\n{_reference_text(references)}"
         references = []
         reference_fallback_used = True
+
+    if has_prior_image and not supports_img2img:
+        prompt = f"{prompt}\n{_continuity_text(subject)}"
+        continuity_fallback_used = True
 
     request = ImageGenerationRequest(
         subject_type=subject.subject_type,
@@ -86,7 +101,7 @@ def _build_request(subject, backend: BaseImageBackend) -> tuple[ImageGenerationR
         mode=_select_mode(subject, backend),
         reference_images=references,
     )
-    return request, reference_fallback_used
+    return request, reference_fallback_used, continuity_fallback_used
 
 
 def process_generation_job(
@@ -99,7 +114,7 @@ def process_generation_job(
     If no backend instance is provided, one is loaded using `backend_config`.
     """
     backend_instance = backend or load_backend(backend_config)
-    request, reference_fallback_used = _build_request(subject, backend_instance)
+    request, reference_fallback_used, continuity_fallback_used = _build_request(subject, backend_instance)
     result = backend_instance.generate(request)
     fingerprint = sha1(request.prompt.encode("utf-8")).hexdigest()
     revision = len(subject.lifecycle.image_history) + 1
@@ -114,6 +129,7 @@ def process_generation_job(
         "mode": request.mode,
         "reference_count": len(request.reference_images),
         "reference_fallback_used": reference_fallback_used,
+        "continuity_fallback_used": continuity_fallback_used,
     }
     subject.lifecycle.set_ready(image_record)
     return image_record

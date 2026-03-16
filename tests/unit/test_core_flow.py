@@ -198,3 +198,20 @@ def test_non_notable_references_are_excluded_in_prompt_fallback() -> None:
     assert "golden throne" in image["prompt"]
     assert "war banner" in image["prompt"]
     assert "wooden cup" not in image["prompt"]
+
+
+def test_txt2img_fallback_includes_continuity_hint_when_prior_image_exists() -> None:
+    room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
+    room.queue_for_generation(reason="look")
+    process_generation_job(room, PlaceholderBackend())
+    room.mark_image_stale(reason="updated")
+    room.queue_for_generation(reason="look")
+
+    backend = TxtOnlyBackend()
+    image = process_generation_job(room, backend=backend)
+
+    assert image["mode"] == "txt2img"
+    assert image["reference_fallback_used"] is False
+    assert image["continuity_fallback_used"] is True
+    assert "Continuity/style hint" in image["prompt"]
+
