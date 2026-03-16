@@ -30,6 +30,13 @@ class GenerationQueue:
             self.pending.discard(subject_key)
 
 
+@dataclass(frozen=True)
+class RequestBuildResult:
+    request: ImageGenerationRequest
+    reference_fallback_used: bool
+    continuity_fallback_used: bool
+
+
 def _select_mode(subject, backend: BaseImageBackend) -> str:
     wants_img2img = bool(subject.lifecycle.image_current)
     if wants_img2img and backend.capabilities.get("img2img", False):
@@ -51,12 +58,19 @@ def _normalize_reference_images(subject) -> list[ReferenceImage]:
             selected.append(raw)
             continue
 
+        if not isinstance(raw, dict):
+            continue
+
         if not raw.get("notable", True):
+            continue
+
+        path = raw.get("path")
+        if not path:
             continue
 
         selected.append(
             ReferenceImage(
-                path=raw["path"],
+                path=path,
                 role=raw.get("role", "context"),
                 weight=raw.get("weight", 1.0),
                 caption=raw.get("caption"),
@@ -80,7 +94,7 @@ def _continuity_text(subject) -> str:
     return "Continuity/style hint: keep composition and palette consistent with prior version."
 
 
-def _build_request(subject, backend: BaseImageBackend) -> tuple[ImageGenerationRequest, bool, bool]:
+def _build_request(subject, backend: BaseImageBackend) -> RequestBuildResult:
     references = _normalize_reference_images(subject)
     supports_multi_reference = backend.capabilities.get("multi_reference", False)
     supports_img2img = backend.capabilities.get("img2img", False)
@@ -105,7 +119,11 @@ def _build_request(subject, backend: BaseImageBackend) -> tuple[ImageGenerationR
         mode=_select_mode(subject, backend),
         reference_images=references,
     )
-    return request, reference_fallback_used, continuity_fallback_used
+    return RequestBuildResult(
+        request=request,
+        reference_fallback_used=reference_fallback_used,
+        continuity_fallback_used=continuity_fallback_used,
+    )
 
 
 def process_generation_job(
@@ -118,9 +136,9 @@ def process_generation_job(
     If no backend instance is provided, one is loaded using `backend_config`.
     """
     backend_instance = backend or load_backend(backend_config)
-    request, reference_fallback_used, continuity_fallback_used = _build_request(subject, backend_instance)
-    result = backend_instance.generate(request)
-    fingerprint = compute_prompt_fingerprint(request.prompt)
+    build = _build_request(subject, backend_instance)
+    result = backend_instance.generate(build.request)
+    fingerprint = compute_prompt_fingerprint(build.request.prompt)
     revision = len(subject.lifecycle.image_history) + 1
     image_record = {
         "image_id": f"{subject.subject_type}_{subject.subject_key}_{revision:04d}",
@@ -128,12 +146,12 @@ def process_generation_job(
         "url": result.image_url,
         "revision": revision,
         "state_fingerprint": fingerprint,
-        "prompt": request.prompt,
+        "prompt": build.request.prompt,
         "model_name": result.model_name,
-        "mode": request.mode,
-        "reference_count": len(request.reference_images),
-        "reference_fallback_used": reference_fallback_used,
-        "continuity_fallback_used": continuity_fallback_used,
+        "mode": build.request.mode,
+        "reference_count": len(build.request.reference_images),
+        "reference_fallback_used": build.reference_fallback_used,
+        "continuity_fallback_used": build.continuity_fallback_used,
     }
     subject.lifecycle.set_ready(image_record)
     return image_record
