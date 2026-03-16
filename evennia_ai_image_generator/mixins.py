@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .context import collect_subject_context
+from .prompts import build_prompt
 from .state import ImageLifecycle
 
 
@@ -19,7 +21,7 @@ class SceneImageMixin:
         self.lifecycle = ImageLifecycle(max_history=self.max_image_history)
 
     def build_prompt(self) -> str:
-        return self.description.strip() or f"A {self.subject_type} in a text MUD"
+        return build_prompt(collect_subject_context(self))
 
     def collect_reference_images(self) -> list[dict]:
         """Return optional reference images for scene generation."""

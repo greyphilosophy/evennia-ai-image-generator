@@ -5,6 +5,8 @@ from .backend.loader import BackendConfigurationError, load_backend
 from .backend.diffusers_backend import DiffusersBackend
 from .backend.placeholder import PlaceholderBackend
 from .mixins import SceneImageMixin
+from .context import collect_subject_context
+from .prompts import build_prompt, compute_prompt_fingerprint
 from .queue import GenerationQueue, process_generation_job
 
 __all__ = [
@@ -18,5 +20,8 @@ __all__ = [
     "load_backend",
     "ReferenceImage",
     "SceneImageMixin",
+    "collect_subject_context",
+    "build_prompt",
+    "compute_prompt_fingerprint",
     "process_generation_job",
 ]
