@@ -62,3 +62,26 @@ def test_load_backend_requires_dict_options() -> None:
         assert "must be a dictionary" in str(err)
     else:
         raise AssertionError("Expected BackendConfigurationError")
+
+
+def test_load_backend_requires_dict_config() -> None:
+    try:
+        load_backend("placeholder")  # type: ignore[arg-type]
+    except BackendConfigurationError as err:
+        assert "configuration must be a dictionary" in str(err)
+    else:
+        raise AssertionError("Expected BackendConfigurationError")
+
+
+def test_load_backend_requires_string_backend_name() -> None:
+    try:
+        load_backend({"backend": 123})  # type: ignore[arg-type]
+    except BackendConfigurationError as err:
+        assert "name must be a string" in str(err)
+    else:
+        raise AssertionError("Expected BackendConfigurationError")
+
+
+def test_load_backend_treats_none_options_as_empty_dict() -> None:
+    backend = load_backend({"backend": "placeholder", "options": None})
+    assert isinstance(backend, PlaceholderBackend)
