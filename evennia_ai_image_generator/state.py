@@ -73,6 +73,13 @@ class ImageLifecycle:
             self.transition("stale")
         self.image_generation.update({"reason": reason})
 
+
+    def clear_current(self, reason: str = "manual_clear") -> None:
+        """Clear the active image and reset state for fresh generation."""
+        self.image_current = None
+        self.state = "none"
+        self.image_generation.update({"reason": reason, "status": "idle", "error": None})
+
     def trim_history(self, max_entries: int | None = None) -> int:
         """Trim history to newest `max_entries` records and return removed count."""
         limit = self.max_history if max_entries is None else max_entries
