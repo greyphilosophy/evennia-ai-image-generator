@@ -98,6 +98,21 @@ def test_queue_deduplicates_subject_jobs() -> None:
     assert queue.queue_image_generation("room-1") is True
 
 
+
+
+def test_queue_deduplicates_under_concurrency() -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    queue = GenerationQueue()
+
+    def attempt() -> bool:
+        return queue.queue_image_generation("room-threads")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _: attempt(), range(32)))
+
+    assert sum(results) == 1
+
 def test_process_generation_job_falls_back_to_txt2img_when_img2img_unsupported() -> None:
     room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
     room.queue_for_generation(reason="look")
