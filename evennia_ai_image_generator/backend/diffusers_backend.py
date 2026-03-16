@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha1
 from pathlib import Path
+from threading import Lock
 from time import perf_counter
 from typing import Any
 
@@ -35,6 +36,9 @@ class DiffusersBackend(BaseImageBackend):
         "inpainting": False,
     }
 
+    _shared_bundle_cache: dict[tuple[str, str, str, str | None, bool], _PipelineBundle] = {}
+    _cache_lock = Lock()
+
     def __init__(
         self,
         model_id: str = "runwayml/stable-diffusion-v1-5",
@@ -60,9 +64,26 @@ class DiffusersBackend(BaseImageBackend):
         self.num_inference_steps = num_inference_steps
         self._bundle: _PipelineBundle | None = None
 
+    def _cache_key(self) -> tuple[str, str, str, str | None, bool]:
+        return (
+            self.model_id,
+            self.device,
+            self.torch_dtype,
+            self.revision,
+            self.use_safetensors,
+        )
+
     def _load_bundle(self) -> _PipelineBundle:
         if self._bundle is not None:
             return self._bundle
+
+        cache_key = self._cache_key()
+
+        with self._cache_lock:
+            cached_bundle = self._shared_bundle_cache.get(cache_key)
+            if cached_bundle is not None:
+                self._bundle = cached_bundle
+                return cached_bundle
 
         try:
             import torch
@@ -86,8 +107,17 @@ class DiffusersBackend(BaseImageBackend):
 
         pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
         pipeline = pipeline.to(self.device)
-        self._bundle = _PipelineBundle(pipeline=pipeline, device=self.device)
-        return self._bundle
+        bundle = _PipelineBundle(pipeline=pipeline, device=self.device)
+
+        with self._cache_lock:
+            existing = self._shared_bundle_cache.get(cache_key)
+            if existing is not None:
+                self._bundle = existing
+                return existing
+
+            self._shared_bundle_cache[cache_key] = bundle
+            self._bundle = bundle
+            return bundle
 
     def _build_paths(self, request: ImageGenerationRequest) -> tuple[str, str]:
         digest_input = (
