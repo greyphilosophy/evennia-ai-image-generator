@@ -215,6 +215,40 @@ def test_non_notable_references_are_excluded_in_prompt_fallback() -> None:
     assert "wooden cup" not in image["prompt"]
 
 
+class MalformedReferencedSubject(SceneImageMixin):
+    def collect_reference_images(self):
+        return [
+            None,
+            "not-a-dict",
+            {"role": "object", "caption": "missing path"},
+            {"path": "generated/valid.png", "role": "object", "caption": "valid ref"},
+        ]
+
+
+def test_malformed_reference_entries_are_ignored_for_multi_reference_backends() -> None:
+    room = MalformedReferencedSubject(subject_type="room", subject_key="workshop", description="A busy workshop")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 1
+    assert backend.last_request is not None
+    assert [ref.caption for ref in backend.last_request.reference_images] == ["valid ref"]
+
+
+def test_malformed_reference_entries_are_ignored_in_prompt_fallback() -> None:
+    room = MalformedReferencedSubject(subject_type="room", subject_key="workshop", description="A busy workshop")
+    room.queue_for_generation(reason="look")
+
+    image = process_generation_job(room, backend=TxtOnlyBackend())
+
+    assert image["reference_count"] == 0
+    assert image["reference_fallback_used"] is True
+    assert "valid ref" in image["prompt"]
+    assert "missing path" not in image["prompt"]
+
+
 def test_txt2img_fallback_includes_continuity_hint_when_prior_image_exists() -> None:
     room = SceneImageMixin(subject_type="room", subject_key="forest", description="A dark forest")
     room.queue_for_generation(reason="look")
