@@ -40,6 +40,21 @@ class DiffusersBackend(BaseImageBackend):
     _inflight_loads: dict[tuple[str, str, str, str | None, bool], Event] = {}
     _cache_lock = Lock()
 
+    @classmethod
+    def clear_shared_cache(cls) -> int:
+        """Clear cached pipeline bundles and return number of removed entries."""
+        with cls._cache_lock:
+            removed = len(cls._shared_bundle_cache)
+            cls._shared_bundle_cache.clear()
+            cls._inflight_loads.clear()
+            return removed
+
+    @classmethod
+    def shared_cache_size(cls) -> int:
+        """Return number of cached pipeline bundles."""
+        with cls._cache_lock:
+            return len(cls._shared_bundle_cache)
+
     def __init__(
         self,
         model_id: str = "runwayml/stable-diffusion-v1-5",
