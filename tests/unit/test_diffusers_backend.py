@@ -107,3 +107,28 @@ def test_diffusers_backend_threadsafe_singleflight_bundle_load(monkeypatch) -> N
     assert len(results) == 2
     assert results[0] is results[1]
     assert _FakeStableDiffusionPipeline.load_calls == 1
+
+
+def test_diffusers_backend_shared_cache_management_helpers(monkeypatch) -> None:
+    class _FakePipeline:
+        def to(self, device):
+            return self
+
+    class _FakeStableDiffusionPipeline:
+        @classmethod
+        def from_pretrained(cls, **kwargs):
+            return _FakePipeline()
+
+    fake_torch = types.SimpleNamespace(float32="float32")
+    fake_diffusers = types.SimpleNamespace(StableDiffusionPipeline=_FakeStableDiffusionPipeline)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+
+    DiffusersBackend.clear_shared_cache()
+    backend = DiffusersBackend(dry_run=False)
+    backend._load_bundle()
+    assert DiffusersBackend.shared_cache_size() == 1
+
+    removed = DiffusersBackend.clear_shared_cache()
+    assert removed == 1
+    assert DiffusersBackend.shared_cache_size() == 0
