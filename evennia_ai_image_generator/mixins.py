@@ -13,9 +13,10 @@ class SceneImageMixin:
     subject_key: str = "unknown"
     image_enabled: bool = True
     description: str = ""
+    max_image_history: int | None = None
 
     def __post_init__(self) -> None:
-        self.lifecycle = ImageLifecycle()
+        self.lifecycle = ImageLifecycle(max_history=self.max_image_history)
 
     def build_prompt(self) -> str:
         return self.description.strip() or f"A {self.subject_type} in a text MUD"

@@ -24,6 +24,7 @@ class ImageLifecycle:
     image_history: list[dict] = field(default_factory=list)
     image_index: dict[str, dict] = field(default_factory=dict)
     image_generation: dict = field(default_factory=dict)
+    max_history: int | None = None
 
     def transition(self, new_state: ImageState) -> None:
         if new_state == self.state:
@@ -58,6 +59,7 @@ class ImageLifecycle:
                 "revision": image_record.get("revision"),
                 "url": image_record.get("url"),
             }
+        self.trim_history()
         self.image_generation.update({"status": "ready", "error": None})
 
     def set_failed(self, error: str) -> None:
@@ -70,3 +72,31 @@ class ImageLifecycle:
         if self.state == "ready":
             self.transition("stale")
         self.image_generation.update({"reason": reason})
+
+    def trim_history(self, max_entries: int | None = None) -> int:
+        """Trim history to newest `max_entries` records and return removed count."""
+        limit = self.max_history if max_entries is None else max_entries
+        if limit is None or limit < 0:
+            return 0
+        if len(self.image_history) <= limit:
+            return 0
+
+        removed = len(self.image_history) - limit
+        self.image_history = self.image_history[-limit:]
+
+        retained_fingerprints = {
+            entry.get("state_fingerprint")
+            for entry in self.image_history
+            if entry.get("state_fingerprint")
+        }
+
+        current_fingerprint = (self.image_current or {}).get("state_fingerprint")
+        if current_fingerprint:
+            retained_fingerprints.add(current_fingerprint)
+
+        self.image_index = {
+            fingerprint: record
+            for fingerprint, record in self.image_index.items()
+            if fingerprint in retained_fingerprints
+        }
+        return removed

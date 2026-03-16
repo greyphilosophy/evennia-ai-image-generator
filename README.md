@@ -170,6 +170,8 @@ Example triggers include:
 
 These triggers mark the current image as stale and queue a regeneration job.
 
+You can also cap per-subject history retention by setting `max_image_history` on your typeclass mixin instance/class. When set, only the newest image metadata entries are retained.
+
 ---
 
 # Documentation
