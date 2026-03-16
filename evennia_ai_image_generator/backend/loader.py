@@ -21,9 +21,19 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
     - {"backend": "pkg.module:ClassName", "options": {...}}
     """
 
-    config = config or {}
+    if config is None:
+        config = {}
+    elif not isinstance(config, dict):
+        raise BackendConfigurationError("Backend configuration must be a dictionary")
+
     backend_name = config.get("backend", "placeholder")
     options = config.get("options", {})
+
+    if not isinstance(backend_name, str):
+        raise BackendConfigurationError("Backend name must be a string")
+
+    if options is None:
+        options = {}
 
     if not isinstance(options, dict):
         raise BackendConfigurationError("Backend options must be a dictionary")
