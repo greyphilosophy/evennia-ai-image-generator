@@ -126,6 +126,22 @@ IMAGE_BACKEND = {
 
 Set `shared_model_cache=False` if you need strict per-worker model isolation instead of process-wide cache reuse.
 
+You can also resolve runtime services from one config dictionary:
+
+```python
+from evennia_ai_image_generator import build_runtime_services
+
+services = build_runtime_services({
+    "backend": {
+        "backend": "diffusers",
+        "options": {"dry_run": True, "shared_model_cache": False},
+    },
+    "queue": {"max_pending": 10},
+    "max_image_history": 25,
+})
+```
+
+
 Recommended open-source models:
 
 * `runwayml/stable-diffusion-v1-5` (default recommendation; strong quality/speed tradeoff for SD1.5)

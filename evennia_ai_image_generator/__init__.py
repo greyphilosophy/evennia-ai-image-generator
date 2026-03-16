@@ -8,6 +8,7 @@ from .mixins import SceneImageMixin
 from .context import collect_subject_context
 from .prompts import build_prompt, compute_prompt_fingerprint
 from .queue import GenerationQueue, build_generation_queue, process_generation_job
+from .config import RuntimeServices, build_runtime_services
 from .commands import imagegen, imageregen, imageclear, imageprompt
 
 __all__ = [
@@ -26,6 +27,8 @@ __all__ = [
     "build_prompt",
     "compute_prompt_fingerprint",
     "process_generation_job",
+    "RuntimeServices",
+    "build_runtime_services",
     "imagegen",
     "imageregen",
     "imageclear",
