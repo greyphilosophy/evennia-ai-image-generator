@@ -1,17 +1,26 @@
 from __future__ import annotations
 
-from .queue import GenerationQueue
+from .queue import EnqueueStatus, GenerationQueue
 
 
-def _queue_subject(subject, queue: GenerationQueue | None = None, *, reason: str = "builder") -> bool:
-    """Queue lifecycle and optional global queue entry, with deduplication."""
-    if queue is not None and not queue.queue_image_generation(subject.subject_key):
-        if subject.image_state != "pending":
+def _queue_subject(
+    subject,
+    queue: GenerationQueue | None = None,
+    *,
+    reason: str = "builder",
+) -> EnqueueStatus:
+    """Queue lifecycle and optional global queue entry, with explicit outcomes."""
+    if queue is not None:
+        status = queue.enqueue_with_status(subject.subject_key)
+        if status == "queued":
             subject.lifecycle.mark_pending(reason=reason)
-        return False
+        elif status == "duplicate" and subject.image_state != "pending":
+            # Keep subject lifecycle aligned with queue dedupe state.
+            subject.lifecycle.mark_pending(reason=reason)
+        return status
 
     subject.lifecycle.mark_pending(reason=reason)
-    return True
+    return "queued"
 
 
 def imagegen(subject, queue: GenerationQueue | None = None) -> str:
@@ -22,9 +31,11 @@ def imagegen(subject, queue: GenerationQueue | None = None) -> str:
     if subject.image_state == "ready":
         subject.mark_image_stale(reason="builder_gen")
 
-    queued = _queue_subject(subject, queue=queue, reason="builder_gen")
-    if queued:
+    queue_status = _queue_subject(subject, queue=queue, reason="builder_gen")
+    if queue_status == "queued":
         return f"Queued image generation for {subject.subject_key}."
+    if queue_status == "full":
+        return "Image generation queue is full. Please try again shortly."
     return f"Image generation already pending for {subject.subject_key}."
 
 
@@ -34,9 +45,11 @@ def imageregen(subject, queue: GenerationQueue | None = None) -> str:
         return "Image generation is disabled for this subject."
 
     subject.mark_image_stale(reason="builder_regen")
-    queued = _queue_subject(subject, queue=queue, reason="builder_regen")
-    if queued:
+    queue_status = _queue_subject(subject, queue=queue, reason="builder_regen")
+    if queue_status == "queued":
         return f"Queued image regeneration for {subject.subject_key}."
+    if queue_status == "full":
+        return "Image generation queue is full. Please try again shortly."
     return f"Image generation already pending for {subject.subject_key}."
 
 
