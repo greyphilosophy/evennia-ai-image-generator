@@ -144,6 +144,19 @@ def _continuity_text(subject) -> str:
     return "Continuity/style hint: keep composition and palette consistent with prior version."
 
 
+def _continuity_reference(subject) -> ReferenceImage | None:
+    current = getattr(subject.lifecycle, "image_current", None) or {}
+    path = current.get("path")
+    if not path:
+        return None
+    return ReferenceImage(
+        path=path,
+        role="continuity",
+        weight=1.0,
+        caption="prior scene",
+    )
+
+
 def _build_request(subject, backend: BaseImageBackend) -> RequestBuildResult:
     references = _normalize_reference_images(subject)
     supports_multi_reference = backend.capabilities.get("multi_reference", False)
@@ -158,9 +171,17 @@ def _build_request(subject, backend: BaseImageBackend) -> RequestBuildResult:
         references = []
         reference_fallback_used = True
 
-    if has_prior_image and not supports_img2img:
-        prompt = f"{prompt}\n{_continuity_text(subject)}"
-        continuity_fallback_used = True
+    if has_prior_image:
+        if supports_img2img:
+            continuity_reference = _continuity_reference(subject)
+            if continuity_reference is not None and not any(
+                ref.path == continuity_reference.path and ref.role == "continuity"
+                for ref in references
+            ):
+                references.insert(0, continuity_reference)
+        else:
+            prompt = f"{prompt}\n{_continuity_text(subject)}"
+            continuity_fallback_used = True
 
     request = ImageGenerationRequest(
         subject_type=subject.subject_type,
