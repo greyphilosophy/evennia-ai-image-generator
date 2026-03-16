@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import Any
 
 from .base import BaseImageBackend, ImageGenerationRequest, ImageGenerationResult
+from ..errors import ModelLoadError
 
 
 class DiffusersBackendDependencyError(ImportError):
@@ -186,8 +187,13 @@ class DiffusersBackend(BaseImageBackend):
         if self.revision:
             kwargs["revision"] = self.revision
 
-        pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
-        pipeline = pipeline.to(self.device)
+        try:
+            pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
+            pipeline = pipeline.to(self.device)
+        except Exception as err:  # pragma: no cover - runtime/model dependent
+            raise ModelLoadError(
+                f"Failed to initialize diffusers model {self.model_id!r} on device {self.device!r}"
+            ) from err
         return _PipelineBundle(pipeline=pipeline, device=self.device)
 
     def _build_paths(self, request: ImageGenerationRequest) -> tuple[str, str]:
