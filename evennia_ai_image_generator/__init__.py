@@ -7,12 +7,13 @@ from .backend.placeholder import PlaceholderBackend
 from .mixins import SceneImageMixin
 from .context import collect_subject_context
 from .prompts import build_prompt, compute_prompt_fingerprint
-from .queue import GenerationQueue, process_generation_job
+from .queue import GenerationQueue, build_generation_queue, process_generation_job
 from .commands import imagegen, imageregen, imageclear, imageprompt
 
 __all__ = [
     "BaseImageBackend",
     "GenerationQueue",
+    "build_generation_queue",
     "ImageGenerationRequest",
     "ImageGenerationResult",
     "PlaceholderBackend",
