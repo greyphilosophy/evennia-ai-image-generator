@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .context import collect_subject_context
 from .prompts import build_prompt
-from .state import ImageLifecycle
+from .state import ImageLifecycle, validate_max_image_history_limit
 
 
 @dataclass
@@ -18,6 +18,10 @@ class SceneImageMixin:
     max_image_history: int | None = None
 
     def __post_init__(self) -> None:
+        self.max_image_history = validate_max_image_history_limit(
+            self.max_image_history,
+            option_name="max_image_history",
+        )
         self.lifecycle = ImageLifecycle(max_history=self.max_image_history)
 
     def build_prompt(self) -> str:

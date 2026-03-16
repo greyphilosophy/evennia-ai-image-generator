@@ -15,6 +15,16 @@ ALLOWED_TRANSITIONS: dict[ImageState, set[ImageState]] = {
 }
 
 
+def validate_max_image_history_limit(value: int | None, *, option_name: str) -> int | None:
+    """Validate optional non-negative integer history limits."""
+
+    if isinstance(value, bool) or (value is not None and not isinstance(value, int)):
+        raise ValueError(f"{option_name} must be an integer or None")
+    if isinstance(value, int) and value < 0:
+        raise ValueError(f"{option_name} must be 0 or greater")
+    return value
+
+
 @dataclass
 class ImageLifecycle:
     """Tracks image state and lightweight metadata for a subject."""
@@ -25,6 +35,9 @@ class ImageLifecycle:
     image_index: dict[str, dict] = field(default_factory=dict)
     image_generation: dict = field(default_factory=dict)
     max_history: int | None = None
+
+    def __post_init__(self) -> None:
+        self.max_history = validate_max_image_history_limit(self.max_history, option_name="max_history")
 
     def transition(self, new_state: ImageState) -> None:
         if new_state == self.state:
