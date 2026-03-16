@@ -460,6 +460,77 @@ def test_img2img_does_not_duplicate_existing_continuity_reference() -> None:
 
 
 
+
+class InvalidReferenceConfigSubject(SceneImageMixin):
+    max_reference_images = "not-an-int"
+
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/alpha.png", "role": "object", "caption": "alpha", "weight": "heavy"},
+            {"path": "generated/bravo.png", "role": "object", "caption": "bravo", "weight": "2.0"},
+            {"path": "generated/charlie.png", "role": "object", "caption": "charlie", "weight": None},
+            {"path": "generated/delta.png", "role": "object", "caption": "delta", "weight": -0.25},
+            {"path": "generated/echo.png", "role": "object", "caption": "echo", "weight": 0.5},
+        ]
+
+
+def test_invalid_reference_limits_and_weights_fall_back_safely() -> None:
+    room = InvalidReferenceConfigSubject(subject_type="room", subject_key="archive", description="A dusty archive")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 4
+    assert backend.last_request is not None
+    captions = [ref.caption for ref in backend.last_request.reference_images]
+    assert captions == ["bravo", "alpha", "charlie", "echo"]
+
+
+class BoolMaxReferencesSubject(SceneImageMixin):
+    max_reference_images = True
+
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/one.png", "role": "object", "caption": "one", "weight": 1.0},
+            {"path": "generated/two.png", "role": "object", "caption": "two", "weight": 0.9},
+        ]
+
+
+def test_boolean_max_reference_images_uses_default_limit() -> None:
+    room = BoolMaxReferencesSubject(subject_type="room", subject_key="study", description="A quiet study")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 2
+    assert backend.last_request is not None
+    assert [ref.caption for ref in backend.last_request.reference_images] == ["one", "two"]
+
+
+class NonFiniteWeightsSubject(SceneImageMixin):
+    def collect_reference_images(self):
+        return [
+            {"path": "generated/nan.png", "role": "object", "caption": "nan", "weight": "nan"},
+            {"path": "generated/inf.png", "role": "object", "caption": "inf", "weight": "inf"},
+            {"path": "generated/ok.png", "role": "object", "caption": "ok", "weight": 2.5},
+            {"path": "generated/bool.png", "role": "object", "caption": "bool", "weight": False},
+        ]
+
+
+def test_non_finite_and_boolean_weights_fall_back_to_default_weight() -> None:
+    room = NonFiniteWeightsSubject(subject_type="room", subject_key="lab", description="A chaotic lab")
+    room.queue_for_generation(reason="look")
+    backend = RequestCapturingBackend()
+
+    image = process_generation_job(room, backend=backend)
+
+    assert image["reference_count"] == 4
+    assert backend.last_request is not None
+    captions = [ref.caption for ref in backend.last_request.reference_images]
+    assert captions == ["ok", "nan", "inf", "bool"]
+
 def test_build_generation_queue_defaults_to_unbounded_queue() -> None:
     queue = build_generation_queue()
 

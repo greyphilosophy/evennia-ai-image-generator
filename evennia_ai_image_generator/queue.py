@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 from threading import Lock
 from typing import Any, Literal
 
@@ -101,7 +102,17 @@ def _normalize_reference_images(subject) -> list[ReferenceImage]:
     if collector is None:
         return []
 
-    max_references = int(getattr(subject, "max_reference_images", 4))
+    raw_max_references = getattr(subject, "max_reference_images", 4)
+    if isinstance(raw_max_references, bool):
+        max_references = 4
+    else:
+        try:
+            max_references = int(raw_max_references)
+        except (TypeError, ValueError):
+            max_references = 4
+
+    if max_references < 0:
+        max_references = 0
     raw_references = collector() or []
     selected: list[ReferenceImage] = []
 
@@ -120,11 +131,23 @@ def _normalize_reference_images(subject) -> list[ReferenceImage]:
         if not path:
             continue
 
+        raw_weight = raw.get("weight", 1.0)
+        if isinstance(raw_weight, bool):
+            weight = 1.0
+        else:
+            try:
+                weight = float(raw_weight)
+            except (TypeError, ValueError):
+                weight = 1.0
+
+        if not math.isfinite(weight):
+            weight = 1.0
+
         selected.append(
             ReferenceImage(
                 path=path,
                 role=raw.get("role", "context"),
-                weight=raw.get("weight", 1.0),
+                weight=weight,
                 caption=raw.get("caption"),
             )
         )
