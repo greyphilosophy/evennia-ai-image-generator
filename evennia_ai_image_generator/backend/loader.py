@@ -18,6 +18,7 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
 
     - None / {}: returns PlaceholderBackend()
     - {"backend": "placeholder", "options": {...}}
+    - {"backend": "diffusers", "options": {...}}
     - {"backend": "pkg.module:ClassName", "options": {...}}
     """
 
@@ -41,9 +42,14 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
     if backend_name == "placeholder":
         return PlaceholderBackend(**options)
 
+    if backend_name == "diffusers":
+        from .diffusers_backend import DiffusersBackend
+
+        return DiffusersBackend(**options)
+
     if ":" not in backend_name:
         raise BackendConfigurationError(
-            "Unknown backend. Use 'placeholder' or a 'module.path:ClassName' backend path"
+            "Unknown backend. Use 'placeholder', 'diffusers', or a 'module.path:ClassName' backend path"
         )
 
     module_name, class_name = backend_name.split(":", 1)
