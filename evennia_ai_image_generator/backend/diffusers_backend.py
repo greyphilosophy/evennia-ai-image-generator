@@ -67,6 +67,7 @@ class DiffusersBackend(BaseImageBackend):
         dry_run: bool = False,
         guidance_scale: float = 7.5,
         num_inference_steps: int = 20,
+        shared_model_cache: bool = True,
     ) -> None:
         self.model_id = model_id
         self.revision = revision
@@ -78,7 +79,31 @@ class DiffusersBackend(BaseImageBackend):
         self.dry_run = dry_run
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
+        self.shared_model_cache = self._coerce_bool_option(
+            shared_model_cache,
+            option_name="shared_model_cache",
+        )
         self._bundle: _PipelineBundle | None = None
+
+
+    @staticmethod
+    def _coerce_bool_option(value: Any, option_name: str) -> bool:
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, int):
+            if value in (0, 1):
+                return bool(value)
+            raise ValueError(f"{option_name} must be a boolean")
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+
+        raise ValueError(f"{option_name} must be a boolean")
 
     def _cache_key(self) -> tuple[str, str, str, str | None, bool]:
         return (
@@ -91,6 +116,10 @@ class DiffusersBackend(BaseImageBackend):
 
     def _load_bundle(self) -> _PipelineBundle:
         if self._bundle is not None:
+            return self._bundle
+
+        if not self.shared_model_cache:
+            self._bundle = self._initialize_bundle()
             return self._bundle
 
         cache_key = self._cache_key()
@@ -119,29 +148,7 @@ class DiffusersBackend(BaseImageBackend):
             raise RuntimeError("Backend model initialization did not produce a cached pipeline")
 
         try:
-            try:
-                import torch
-                from diffusers import StableDiffusionPipeline
-            except Exception as err:  # pragma: no cover - depends on environment
-                raise DiffusersBackendDependencyError(
-                    "Diffusers backend requires `diffusers` and `torch` to be installed"
-                ) from err
-
-            dtype = getattr(torch, self.torch_dtype, None)
-            if dtype is None:
-                raise ValueError(f"Unknown torch dtype: {self.torch_dtype}")
-
-            kwargs = {
-                "pretrained_model_name_or_path": self.model_id,
-                "torch_dtype": dtype,
-                "use_safetensors": self.use_safetensors,
-            }
-            if self.revision:
-                kwargs["revision"] = self.revision
-
-            pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
-            pipeline = pipeline.to(self.device)
-            bundle = _PipelineBundle(pipeline=pipeline, device=self.device)
+            bundle = self._initialize_bundle()
 
             with self._cache_lock:
                 existing = self._shared_bundle_cache.get(cache_key)
@@ -157,6 +164,31 @@ class DiffusersBackend(BaseImageBackend):
                 inflight = self._inflight_loads.pop(cache_key, None)
                 if inflight is not None:
                     inflight.set()
+
+    def _initialize_bundle(self) -> _PipelineBundle:
+        try:
+            import torch
+            from diffusers import StableDiffusionPipeline
+        except Exception as err:  # pragma: no cover - depends on environment
+            raise DiffusersBackendDependencyError(
+                "Diffusers backend requires `diffusers` and `torch` to be installed"
+            ) from err
+
+        dtype = getattr(torch, self.torch_dtype, None)
+        if dtype is None:
+            raise ValueError(f"Unknown torch dtype: {self.torch_dtype}")
+
+        kwargs = {
+            "pretrained_model_name_or_path": self.model_id,
+            "torch_dtype": dtype,
+            "use_safetensors": self.use_safetensors,
+        }
+        if self.revision:
+            kwargs["revision"] = self.revision
+
+        pipeline = StableDiffusionPipeline.from_pretrained(**kwargs)
+        pipeline = pipeline.to(self.device)
+        return _PipelineBundle(pipeline=pipeline, device=self.device)
 
     def _build_paths(self, request: ImageGenerationRequest) -> tuple[str, str]:
         digest_input = (
@@ -180,6 +212,7 @@ class DiffusersBackend(BaseImageBackend):
                 "dry_run": True,
                 "device": self.device,
                 "num_inference_steps": self.num_inference_steps,
+                "shared_model_cache": self.shared_model_cache,
             },
         )
 
@@ -233,5 +266,6 @@ class DiffusersBackend(BaseImageBackend):
                 "size": [image.width, image.height],
                 "num_inference_steps": self.num_inference_steps,
                 "guidance_scale": kwargs["guidance_scale"],
+                "shared_model_cache": self.shared_model_cache,
             },
         )

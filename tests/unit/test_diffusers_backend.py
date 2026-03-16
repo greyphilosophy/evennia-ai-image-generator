@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 import threading
 import time
 import types
@@ -132,3 +133,90 @@ def test_diffusers_backend_shared_cache_management_helpers(monkeypatch) -> None:
     removed = DiffusersBackend.clear_shared_cache()
     assert removed == 1
     assert DiffusersBackend.shared_cache_size() == 0
+
+
+def test_diffusers_backend_can_disable_shared_model_cache(monkeypatch) -> None:
+    class _FakePipeline:
+        def to(self, device):
+            return self
+
+    class _FakeStableDiffusionPipeline:
+        load_calls = 0
+
+        @classmethod
+        def from_pretrained(cls, **kwargs):
+            cls.load_calls += 1
+            return _FakePipeline()
+
+    fake_torch = types.SimpleNamespace(float32="float32")
+    fake_diffusers = types.SimpleNamespace(StableDiffusionPipeline=_FakeStableDiffusionPipeline)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+
+    DiffusersBackend.clear_shared_cache()
+    backend_one = DiffusersBackend(dry_run=False, shared_model_cache=False)
+    backend_two = DiffusersBackend(dry_run=False, shared_model_cache=False)
+
+    bundle_one = backend_one._load_bundle()
+    bundle_two = backend_two._load_bundle()
+
+    assert bundle_one is not bundle_two
+    assert _FakeStableDiffusionPipeline.load_calls == 2
+    assert DiffusersBackend.shared_cache_size() == 0
+
+
+def test_diffusers_backend_coerces_shared_model_cache_from_common_values() -> None:
+    assert DiffusersBackend(dry_run=True, shared_model_cache=True).shared_model_cache is True
+    assert DiffusersBackend(dry_run=True, shared_model_cache=False).shared_model_cache is False
+    assert DiffusersBackend(dry_run=True, shared_model_cache="yes").shared_model_cache is True
+    assert DiffusersBackend(dry_run=True, shared_model_cache="off").shared_model_cache is False
+    assert DiffusersBackend(dry_run=True, shared_model_cache=1).shared_model_cache is True
+    assert DiffusersBackend(dry_run=True, shared_model_cache=0).shared_model_cache is False
+
+
+def test_diffusers_backend_rejects_invalid_shared_model_cache_values() -> None:
+    for invalid_value in ("", "sometimes", 2, -1, object()):
+        try:
+            DiffusersBackend(dry_run=True, shared_model_cache=invalid_value)
+        except ValueError as err:
+            assert "shared_model_cache" in str(err)
+        else:
+            raise AssertionError(f"Expected ValueError for invalid shared_model_cache={invalid_value!r}")
+
+
+def test_diffusers_backend_generation_metadata_reports_shared_cache(monkeypatch, tmp_path) -> None:
+    class _FakeImage:
+        width = 512
+        height = 512
+
+        def save(self, path):
+            Path(path).write_bytes(b"fake")
+
+    class _FakePipeline:
+        def to(self, device):
+            return self
+
+        def __call__(self, **kwargs):
+            return types.SimpleNamespace(images=[_FakeImage()])
+
+    class _FakeStableDiffusionPipeline:
+        @classmethod
+        def from_pretrained(cls, **kwargs):
+            return _FakePipeline()
+
+    fake_torch = types.SimpleNamespace(float32="float32")
+    fake_diffusers = types.SimpleNamespace(StableDiffusionPipeline=_FakeStableDiffusionPipeline)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+
+    DiffusersBackend.clear_shared_cache()
+    backend = DiffusersBackend(
+        dry_run=False,
+        shared_model_cache=False,
+        output_dir=str(tmp_path / "generated"),
+        media_url_base="https://game.test/media/generated",
+    )
+
+    result = backend.generate(_request())
+
+    assert result.metadata.get("shared_model_cache") is False
