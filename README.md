@@ -59,6 +59,22 @@ For now, install from source by vendoring the package into your Evennia project:
 2. Add the package to your Evennia settings.
 3. Run migrations.
 
+### Option B: vendor directly into your game repo
+
+Copy only the package directory into your game project:
+
+```text
+from: C:\MUD\evennia-ai-image-generator\evennia_ai_image_generator
+to:   C:\MUD\aicompany_mud\evennia_ai_image_generator
+```
+
+This avoids `PYTHONPATH` changes but means you must recopy updates when this repo changes.
+
+After either option:
+
+1. Add the package to your Evennia settings.
+2. Run migrations.
+
 Add the package to your Evennia settings:
 
 ```python
