@@ -2,32 +2,54 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any
+from typing import Any, Literal
 
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ReferenceImage
 from .backend.loader import load_backend
 from .prompts import compute_prompt_fingerprint
 
 
+
+EnqueueStatus = Literal["queued", "duplicate", "full"]
+
+
 @dataclass
 class GenerationQueue:
     pending: set[str]
+    max_pending: int | None
 
-    def __init__(self) -> None:
+    def __init__(self, max_pending: int | None = None) -> None:
+        if max_pending is not None and max_pending < 1:
+            raise ValueError("max_pending must be at least 1 when provided")
         self.pending = set()
+        self.max_pending = max_pending
         self._lock = Lock()
 
-    def queue_image_generation(self, subject_key: str) -> bool:
-        """Return True when queued, False if duplicate."""
+    def enqueue_with_status(self, subject_key: str) -> EnqueueStatus:
+        """Attempt to enqueue a job key and return outcome status."""
         with self._lock:
             if subject_key in self.pending:
-                return False
+                return "duplicate"
+            if self.max_pending is not None and len(self.pending) >= self.max_pending:
+                return "full"
             self.pending.add(subject_key)
-            return True
+            return "queued"
+
+    def queue_image_generation(self, subject_key: str) -> bool:
+        """Return ``True`` when queued, else ``False`` for duplicate or full queue."""
+        return self.enqueue_with_status(subject_key) == "queued"
 
     def mark_complete(self, subject_key: str) -> None:
         with self._lock:
             self.pending.discard(subject_key)
+
+    def is_queued(self, subject_key: str) -> bool:
+        with self._lock:
+            return subject_key in self.pending
+
+    def pending_count(self) -> int:
+        with self._lock:
+            return len(self.pending)
 
 
 @dataclass(frozen=True)

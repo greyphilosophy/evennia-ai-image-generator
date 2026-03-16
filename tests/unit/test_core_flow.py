@@ -98,6 +98,49 @@ def test_queue_deduplicates_subject_jobs() -> None:
     assert queue.queue_image_generation("room-1") is True
 
 
+def test_queue_can_enforce_max_pending_capacity() -> None:
+    queue = GenerationQueue(max_pending=2)
+
+    assert queue.queue_image_generation("room-1") is True
+    assert queue.queue_image_generation("room-2") is True
+    assert queue.queue_image_generation("room-3") is False
+
+    queue.mark_complete("room-2")
+    assert queue.queue_image_generation("room-3") is True
+
+
+def test_enqueue_with_status_reports_duplicate_and_full_states() -> None:
+    queue = GenerationQueue(max_pending=1)
+
+    assert queue.enqueue_with_status("room-1") == "queued"
+    assert queue.enqueue_with_status("room-1") == "duplicate"
+    assert queue.enqueue_with_status("room-2") == "full"
+
+
+def test_queue_introspection_helpers_reflect_state() -> None:
+    queue = GenerationQueue()
+
+    assert queue.pending_count() == 0
+    assert queue.is_queued("room-1") is False
+
+    queue.queue_image_generation("room-1")
+    assert queue.pending_count() == 1
+    assert queue.is_queued("room-1") is True
+
+    queue.mark_complete("room-1")
+    assert queue.pending_count() == 0
+    assert queue.is_queued("room-1") is False
+
+
+def test_queue_rejects_invalid_max_pending_value() -> None:
+    try:
+        GenerationQueue(max_pending=0)
+    except ValueError as err:
+        assert "max_pending" in str(err)
+    else:
+        raise AssertionError("Expected ValueError for invalid max_pending")
+
+
 
 
 def test_queue_deduplicates_under_concurrency() -> None:
@@ -263,4 +306,3 @@ def test_txt2img_fallback_includes_continuity_hint_when_prior_image_exists() -> 
     assert image["reference_fallback_used"] is False
     assert image["continuity_fallback_used"] is True
     assert "Continuity/style hint" in image["prompt"]
-
