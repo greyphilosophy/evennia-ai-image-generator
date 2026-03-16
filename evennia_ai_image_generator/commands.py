@@ -1,6 +1,44 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from .queue import EnqueueStatus, GenerationQueue
+
+
+PERMISSION_DENIED_MESSAGE = "Only builders can use image management commands."
+
+
+def _coerce_builder_flag(value) -> bool:
+    """Normalize direct/callable builder flags to a strict boolean."""
+    if callable(value):
+        value = value()
+    return bool(value)
+
+
+def _iter_permissions(permissions) -> Iterable[str]:
+    """Yield permission labels from common permission container shapes."""
+    if permissions is None:
+        return ()
+
+    if isinstance(permissions, str):
+        return (permissions,)
+
+    if hasattr(permissions, "all") and callable(permissions.all):
+        return permissions.all()
+
+    return permissions
+
+
+def _actor_is_builder(actor) -> bool:
+    """Return ``True`` when the optional actor has builder privileges."""
+    if actor is None:
+        return True
+
+    if _coerce_builder_flag(getattr(actor, "is_builder", False)):
+        return True
+
+    permissions = _iter_permissions(getattr(actor, "permissions", None))
+    return any(str(permission).lower() == "builder" for permission in permissions)
 
 
 def _queue_subject(
@@ -23,8 +61,11 @@ def _queue_subject(
     return "queued"
 
 
-def imagegen(subject, queue: GenerationQueue | None = None) -> str:
+def imagegen(subject, queue: GenerationQueue | None = None, *, actor=None) -> str:
     """Queue generation/evaluation for a subject when possible."""
+    if not _actor_is_builder(actor):
+        return PERMISSION_DENIED_MESSAGE
+
     if not getattr(subject, "image_enabled", True):
         return "Image generation is disabled for this subject."
 
@@ -39,8 +80,11 @@ def imagegen(subject, queue: GenerationQueue | None = None) -> str:
     return f"Image generation already pending for {subject.subject_key}."
 
 
-def imageregen(subject, queue: GenerationQueue | None = None) -> str:
+def imageregen(subject, queue: GenerationQueue | None = None, *, actor=None) -> str:
     """Mark the subject stale and queue regeneration."""
+    if not _actor_is_builder(actor):
+        return PERMISSION_DENIED_MESSAGE
+
     if not getattr(subject, "image_enabled", True):
         return "Image generation is disabled for this subject."
 
@@ -53,13 +97,19 @@ def imageregen(subject, queue: GenerationQueue | None = None) -> str:
     return f"Image generation already pending for {subject.subject_key}."
 
 
-def imageclear(subject) -> str:
+def imageclear(subject, *, actor=None) -> str:
     """Clear current image while preserving history for optional reuse."""
+    if not _actor_is_builder(actor):
+        return PERMISSION_DENIED_MESSAGE
+
     subject.lifecycle.clear_current(reason="builder_clear")
     return f"Cleared current image for {subject.subject_key}."
 
 
-def imageprompt(subject) -> str:
+def imageprompt(subject, *, actor=None) -> str:
     """Show effective prompt (or last prompt when available)."""
+    if not _actor_is_builder(actor):
+        return PERMISSION_DENIED_MESSAGE
+
     current = getattr(subject.lifecycle, "image_current", None) or {}
     return current.get("prompt") or subject.build_prompt()

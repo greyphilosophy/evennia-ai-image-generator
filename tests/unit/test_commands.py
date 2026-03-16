@@ -182,3 +182,90 @@ def test_imageprompt_builds_new_prompt_when_no_current_image():
     prompt = imageprompt(subject)
 
     assert "Stone floor" in prompt
+
+
+class _Actor:
+    def __init__(self, is_builder=False, permissions=None):
+        self.is_builder = is_builder
+        self.permissions = permissions if permissions is not None else []
+
+
+def test_imagegen_rejects_non_builder_actor():
+    subject = SceneImageMixin(subject_key="tavern")
+    queue = GenerationQueue()
+
+    message = imagegen(subject, queue=queue, actor=_Actor())
+
+    assert message == "Only builders can use image management commands."
+    assert subject.image_state == "none"
+    assert queue.pending_count() == 0
+
+
+def test_imageregen_accepts_actor_with_builder_permission():
+    subject = SceneImageMixin(subject_key="tavern")
+    queue = GenerationQueue()
+
+    message = imageregen(subject, queue=queue, actor=_Actor(permissions=["Builder"]))
+
+    assert message == "Queued image regeneration for tavern."
+    assert subject.image_state == "pending"
+
+
+def test_imageclear_rejects_non_builder_actor():
+    subject = SceneImageMixin(subject_key="tavern")
+    subject.queue_for_generation(reason="look")
+    subject.lifecycle.set_ready(
+        {
+            "image_id": "room_tavern_0001",
+            "path": "/tmp/tavern.png",
+            "url": "https://example.com/tavern.png",
+            "revision": 1,
+            "state_fingerprint": "fp1",
+            "prompt": "old prompt",
+            "model_name": "placeholder",
+            "mode": "txt2img",
+            "reference_count": 0,
+            "reference_fallback_used": False,
+            "continuity_fallback_used": False,
+        }
+    )
+
+    message = imageclear(subject, actor=_Actor())
+
+    assert message == "Only builders can use image management commands."
+    assert subject.image_state == "ready"
+
+
+def test_imageprompt_rejects_non_builder_actor():
+    subject = SceneImageMixin(subject_key="tavern", description="Stone floor")
+
+    message = imageprompt(subject, actor=_Actor())
+
+    assert message == "Only builders can use image management commands."
+
+
+def test_imagegen_accepts_callable_is_builder_flag():
+    class _CallableBuilderActor:
+        permissions = []
+
+        @staticmethod
+        def is_builder() -> bool:
+            return True
+
+    subject = SceneImageMixin(subject_key="tavern")
+    queue = GenerationQueue()
+
+    message = imagegen(subject, queue=queue, actor=_CallableBuilderActor())
+
+    assert message == "Queued image generation for tavern."
+    assert subject.image_state == "pending"
+
+
+def test_imagegen_accepts_string_permissions_container():
+    subject = SceneImageMixin(subject_key="tavern")
+    queue = GenerationQueue()
+
+    message = imagegen(subject, queue=queue, actor=_Actor(permissions="builder"))
+
+    assert message == "Queued image generation for tavern."
+    assert subject.image_state == "pending"
