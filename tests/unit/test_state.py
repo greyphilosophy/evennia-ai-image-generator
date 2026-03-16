@@ -45,3 +45,29 @@ def test_set_ready_requires_pending() -> None:
     lifecycle = ImageLifecycle()
     with pytest.raises(ValueError, match="Can only set ready"):
         lifecycle.set_ready(_record(1))
+
+
+def test_trim_history_zero_limit_clears_history_and_index() -> None:
+    lifecycle = ImageLifecycle()
+    lifecycle.image_history = [_record(1), _record(2)]
+    lifecycle.image_index = {"fp-1": {"revision": 1}, "fp-2": {"revision": 2}}
+    lifecycle.image_current = None
+
+    removed = lifecycle.trim_history(max_entries=0)
+
+    assert removed == 2
+    assert lifecycle.image_history == []
+    assert lifecycle.image_index == {}
+
+
+def test_trim_history_zero_limit_clears_index_even_with_current_image() -> None:
+    lifecycle = ImageLifecycle()
+    lifecycle.image_history = [_record(1), _record(2)]
+    lifecycle.image_index = {"fp-1": {"revision": 1}, "fp-2": {"revision": 2}}
+    lifecycle.image_current = _record(2)
+
+    removed = lifecycle.trim_history(max_entries=0)
+
+    assert removed == 2
+    assert lifecycle.image_history == []
+    assert lifecycle.image_index == {}

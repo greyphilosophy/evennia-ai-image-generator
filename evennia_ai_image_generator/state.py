@@ -89,6 +89,11 @@ class ImageLifecycle:
             return 0
 
         removed = len(self.image_history) - limit
+        if limit == 0:
+            self.image_history = []
+            self.image_index = {}
+            return removed
+
         self.image_history = self.image_history[-limit:]
 
         retained_fingerprints = {
