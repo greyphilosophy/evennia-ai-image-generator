@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha1
 from threading import Lock
 from typing import Any
 
 from .backend.base import BaseImageBackend, ImageGenerationRequest, ReferenceImage
 from .backend.loader import load_backend
+from .prompts import compute_prompt_fingerprint
 
 
 @dataclass
@@ -120,7 +120,7 @@ def process_generation_job(
     backend_instance = backend or load_backend(backend_config)
     request, reference_fallback_used, continuity_fallback_used = _build_request(subject, backend_instance)
     result = backend_instance.generate(request)
-    fingerprint = sha1(request.prompt.encode("utf-8")).hexdigest()
+    fingerprint = compute_prompt_fingerprint(request.prompt)
     revision = len(subject.lifecycle.image_history) + 1
     image_record = {
         "image_id": f"{subject.subject_type}_{subject.subject_key}_{revision:04d}",
