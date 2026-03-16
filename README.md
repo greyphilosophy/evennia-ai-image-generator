@@ -119,9 +119,12 @@ IMAGE_BACKEND = {
         "model_id": "runwayml/stable-diffusion-v1-5",
         "device": "cpu",
         "dry_run": True,
+        "shared_model_cache": True,
     },
 }
 ```
+
+Set `shared_model_cache=False` if you need strict per-worker model isolation instead of process-wide cache reuse.
 
 Recommended open-source models:
 
