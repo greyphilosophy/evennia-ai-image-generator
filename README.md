@@ -49,11 +49,60 @@ When viewed through Discord, the image link is automatically embedded.
 
 # Installation
 
-```
-pip install evennia-ai-image-generator
+`evennia-ai-image-generator` is not currently published on PyPI as an installable wheel/sdist,
+so `pip install evennia-ai-image-generator` will fail.
+
+## Practical install for local Evennia projects
+
+Examples below cover both Windows (`C:\MUD\aicompany_mud`) and Linux/macOS (`~/muddev/aicompany_mud`).
+
+### Option A (recommended): clone the repo next to your game and add it to `PYTHONPATH`
+
+Clone the repo next to your game project:
+
+```bash
+cd ~/muddev
+git clone <this-repo-url> evennia-ai-image-generator
 ```
 
-Add the package to your Evennia settings:
+Then in your Evennia launcher/session environment, ensure Python can import that folder.
+Before launching Evennia, set `PYTHONPATH` **for your shell**:
+
+PowerShell:
+
+```powershell
+$env:PYTHONPATH = "C:\MUD\evennia-ai-image-generator;" + $env:PYTHONPATH
+```
+
+Bash/Zsh:
+
+```bash
+export PYTHONPATH="$HOME/muddev/evennia-ai-image-generator:$PYTHONPATH"
+```
+
+> Note: `$env:PYTHONPATH = ...` is PowerShell syntax and will fail in Bash with `command not found`.
+
+### Option B: vendor directly into your game repo
+
+Copy only the package directory into your game project:
+
+```text
+from: C:\MUD\evennia-ai-image-generator\evennia_ai_image_generator
+to:   C:\MUD\aicompany_mud\evennia_ai_image_generator
+```
+
+This avoids `PYTHONPATH` changes but means you must recopy updates when this repo changes.
+
+After either option:
+
+1. Edit your game settings file:
+   - Windows: `C:\MUD\aicompany_mud\server\conf\settings.py`
+   - Linux/macOS: `~/muddev/aicompany_mud/server/conf/settings.py`
+   - Generic: `<your-evennia-game>/server/conf/settings.py`
+2. Add the package to `INSTALLED_APPS`.
+3. Run migrations.
+
+In `server/conf/settings.py`:
 
 ```python
 INSTALLED_APPS += ["evennia_ai_image_generator"]
@@ -68,6 +117,79 @@ from evennia import DefaultRoom
 class Room(SceneImageMixin, DefaultRoom):
     pass
 ```
+
+Run migrations if needed:
+
+```bash
+evennia migrate
+```
+
+### Troubleshooting: `evennia migrate` says it cannot import `server/conf/settings.py`
+
+If you get an import error, check these in order:
+
+1. **Run from the game directory** (the one containing `server/conf/settings.py`):
+
+```bash
+cd ~/muddev/aicompany_mud
+evennia migrate
+```
+
+2. **Do not replace `INSTALLED_APPS`**. Append instead:
+
+```python
+# correct
+INSTALLED_APPS += ["evennia_ai_image_generator"]
+
+# incorrect (overwrites Evennia defaults)
+# INSTALLED_APPS = ["evennia_ai_image_generator"]
+```
+
+3. **Confirm Python can import the package in the same shell**:
+
+```bash
+python -c "import evennia_ai_image_generator; print('ok')"
+```
+
+4. **Verify your `PYTHONPATH` correctly** (in Bash/Zsh, use `echo`, not `PYTHONPATH` as a command):
+
+```bash
+echo "$PYTHONPATH"
+```
+
+If you see the repo path more than once, or a trailing `:`, that's usually harmless.
+To deduplicate it in your current shell:
+
+```bash
+export PYTHONPATH="$HOME/muddev/evennia-ai-image-generator"
+```
+
+5. **Validate your Evennia settings file syntax/import directly**:
+
+```bash
+python -m py_compile server/conf/settings.py
+python -c "import server.conf.settings; print('settings import ok')"
+```
+
+6. **Try both migrate commands** (Evennia can sometimes emit a generic config error in one mode):
+
+```bash
+evennia migrate --traceback
+evennia migrate
+```
+
+If plain `evennia migrate` succeeds, your setup is likely fine.
+
+7. **Isolate whether the failure is from `evennia_ai_image_generator` or existing settings**:
+
+- Temporarily comment out the `INSTALLED_APPS += ["evennia_ai_image_generator"]` line.
+- Run `evennia migrate` again.
+- If it still fails, the root cause is in your base settings/environment, not this package.
+
+8. **If migrate succeeds but warns about model changes not yet reflected in migrations**, that warning comes from your game apps and is separate from this package.
+
+9. **If using Option A, ensure `PYTHONPATH` is exported in the same terminal session**
+   before running Evennia commands.
 
 ---
 
