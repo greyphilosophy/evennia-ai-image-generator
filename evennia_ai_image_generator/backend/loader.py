@@ -47,9 +47,15 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
 
         return DiffusersBackend(**options)
 
+    if backend_name == "comfyui":
+        from .comfyui_backend import ComfyUIBackend
+
+        return ComfyUIBackend(**options)
+
     if ":" not in backend_name:
         raise BackendConfigurationError(
-            "Unknown backend. Use 'placeholder', 'diffusers', or a 'module.path:ClassName' backend path"
+            "Unknown backend. Use 'placeholder', 'diffusers', 'comfyui', "
+            "or a 'module.path:ClassName' backend path"
         )
 
     module_name, class_name = backend_name.split(":", 1)

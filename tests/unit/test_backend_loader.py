@@ -91,3 +91,8 @@ def test_load_backend_supports_diffusers_shorthand() -> None:
     backend = load_backend({"backend": "diffusers", "options": {"dry_run": True}})
     assert backend.__class__.__name__ == "DiffusersBackend"
 
+
+def test_load_backend_supports_comfyui_shorthand() -> None:
+    backend = load_backend({"backend": "comfyui", "options": {"dry_run": True}})
+    assert backend.__class__.__name__ == "ComfyUIBackend"
+

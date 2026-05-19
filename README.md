@@ -248,6 +248,60 @@ IMAGE_BACKEND = {
 
 Set `shared_model_cache=False` if you need strict per-worker model isolation instead of process-wide cache reuse.
 
+### ComfyUI backend setup
+
+The ComfyUI backend talks to a running [ComfyUI](https://github.com/comfyanonymous/ComfyUI) server via its REST API — no HuggingFace pipeline dependencies required.
+
+**Prerequisites:**
+
+1. **Install ComfyUI** and download at least one checkpoint (e.g. Stable Diffusion 1.5):
+
+```bash
+git clone https://github.com/comfyanonymous/ComfyUI.git
+# Download a checkpoint to models/checkpoints/
+# e.g. Stable Diffusion 1.5, SDXL, Flux, etc.
+```
+
+2. **Start the server** (default port 8188):
+
+```bash
+cd ComfyUI && python main.py --listen 127.0.0.1 --port 8188
+```
+
+3. **Configure the backend** in your Evennia settings:
+
+```python
+IMAGE_BACKEND = {
+    "backend": "comfyui",
+    "options": {
+        "server_url": "http://127.0.0.1:8188",
+        "checkpoint": "v1-5-pruned-emaonly.safetensors",  # optional; picks first if omitted
+        "scheduler": "karras",
+        "sampler_name": "euler",
+        "default_steps": 20,
+        "default_cfg": 7.5,
+        "output_dir": "generated",
+        "media_url_base": "http://localhost:4001/media/generated",
+    },
+}
+```
+
+**Configuration options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `server_url` | `http://127.0.0.1:8188` | ComfyUI API endpoint |
+| `checkpoint` | *(first available)* | Exact checkpoint filename to use |
+| `scheduler` | `karras` | Sampler scheduler (karras, simple, sgm_uniform, etc.) |
+| `sampler_name` | `euler` | Sampler name (euler, dpmpp_2m, etc.) |
+| `default_steps` | 20 | Inference steps per generation |
+| `default_cfg` | 7.5 | Guidance scale |
+| `output_dir` | `generated` | Local output directory |
+| `media_url_base` | `https://game.test/media/generated` | Base URL for serving images |
+| `timeout_s` | 120 | HTTP timeout per request (seconds) |
+| `max_wait_s` | 600 | Max wait for a single generation (seconds) |
+| `dry_run` | False | Return deterministic result without calling ComfyUI |
+
 You can also resolve runtime services from one config dictionary:
 
 ```python
@@ -255,14 +309,25 @@ from evennia_ai_image_generator import build_runtime_services
 
 services = build_runtime_services({
     "backend": {
-        "backend": "diffusers",
-        "options": {"dry_run": True, "shared_model_cache": False},
+        "backend": "comfyui",
+        "options": {
+            "server_url": "http://127.0.0.1:8188",
+            "default_steps": 20,
+            "default_cfg": 7.5,
+        },
     },
     "queue": {"max_pending": 10},
     "max_image_history": 25,
 })
 ```
 
+**Advantages of ComfyUI backend:**
+
+- ✅ No diffusers/torch dependency required — pure REST API
+- ✅ Works with any ComfyUI checkpoint (SD 1.5, SDXL, Flux, etc.)
+- ✅ Leverages existing ComfyUI custom nodes for advanced workflows
+- ✅ Model stays loaded in ComfyUI — fast subsequent generations
+- ✅ GPU acceleration if ComfyUI is running with CUDA
 
 Recommended open-source models:
 
