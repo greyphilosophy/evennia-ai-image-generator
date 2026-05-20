@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evennia-ai-image-generator"
+version = "0.1.0"
+description = "AI-powered image generation backend for Evennia MUDs"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "greyphilosophy"},
+]
+keywords = ["evennia", "mud", "mudlet", "ai", "stable-diffusion", "comfyui", "image-generation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio",
+]
+comfyui = [
+    "httpx>=0.24.0",
+]
+diffusers = [
+    "torch>=2.0.0",
+    "diffusers>=0.20.0",
+    "transformers",
+    "accelerate",
+]
+
+[tool.setuptools.packages.find]
+include = ["evennia_ai_image_generator*"]

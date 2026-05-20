@@ -49,60 +49,33 @@ When viewed through Discord, the image link is automatically embedded.
 
 # Installation
 
-`evennia-ai-image-generator` is not currently published on PyPI as an installable wheel/sdist,
-so `pip install evennia-ai-image-generator` will fail.
-
-## Practical install for local Evennia projects
-
-Examples below cover both Windows (`C:\MUD\aicompany_mud`) and Linux/macOS (`~/muddev/aicompany_mud`).
-
-### Option A (recommended): clone the repo next to your game and add it to `PYTHONPATH`
-
-Clone the repo next to your game project:
+## Quick install (recommended)
 
 ```bash
-cd ~/muddev
-git clone <this-repo-url> evennia-ai-image-generator
+# Clone the repo
+git clone https://github.com/greyphilosophy/evennia-ai-image-generator.git
+cd evennia-ai-image-generator
+
+# Install core dependencies
+pip install -r requirements.txt
 ```
 
-Then in your Evennia launcher/session environment, ensure Python can import that folder.
-Before launching Evennia, set `PYTHONPATH` **for your shell**:
-
-PowerShell:
-
-```powershell
-$env:PYTHONPATH = "C:\MUD\evennia-ai-image-generator;" + $env:PYTHONPATH
-```
-
-Bash/Zsh:
+## Install via pip from GitHub
 
 ```bash
-export PYTHONPATH="$HOME/muddev/evennia-ai-image-generator:$PYTHONPATH"
+# Core dependencies (ComfyUI backend)
+pip install git+https://github.com/greyphilosophy/evennia-ai-image-generator.git
+
+# With Diffusers backend (requires GPU + CUDA)
+pip install "git+https://github.com/greyphilosophy/evennia-ai-image-generator.git#egg=evennia-ai-image-generator[diffusers]"
+
+# With test dependencies
+pip install "git+https://github.com/greyphilosophy/evennia-ai-image-generator.git#egg=evennia-ai-image-generator[test]"
 ```
 
-> Note: `$env:PYTHONPATH = ...` is PowerShell syntax and will fail in Bash with `command not found`.
+## Set up your Evennia game
 
-### Option B: vendor directly into your game repo
-
-Copy only the package directory into your game project:
-
-```text
-from: C:\MUD\evennia-ai-image-generator\evennia_ai_image_generator
-to:   C:\MUD\aicompany_mud\evennia_ai_image_generator
-```
-
-This avoids `PYTHONPATH` changes but means you must recopy updates when this repo changes.
-
-After either option:
-
-1. Edit your game settings file:
-   - Windows: `C:\MUD\aicompany_mud\server\conf\settings.py`
-   - Linux/macOS: `~/muddev/aicompany_mud/server/conf/settings.py`
-   - Generic: `<your-evennia-game>/server/conf/settings.py`
-2. Add the package to `INSTALLED_APPS`.
-3. Run migrations.
-
-In `server/conf/settings.py`:
+After installing, add to your Evennia `settings.py`:
 
 ```python
 INSTALLED_APPS += ["evennia_ai_image_generator"]
@@ -118,13 +91,44 @@ class Room(SceneImageMixin, DefaultRoom):
     pass
 ```
 
-Run migrations if needed:
+Run migrations:
 
 ```bash
 evennia migrate
 ```
 
-### Troubleshooting: `evennia migrate` says it cannot import `server/conf/settings.py`
+### Optional: Configure the backend
+
+For **ComfyUI** backend (recommended — no GPU needed if running externally):
+
+```python
+IMAGE_BACKEND = {
+    "backend": "comfyui",
+    "options": {
+        "server_url": "http://127.0.0.1:8188",
+        "default_steps": 20,
+        "default_cfg": 7.5,
+    },
+}
+```
+
+For **Diffusers** backend (needs local GPU + CUDA):
+
+```python
+IMAGE_BACKEND = {
+    "backend": "diffusers",
+    "options": {
+        "model_id": "runwayml/stable-diffusion-v1-5",
+        "device": "cuda",
+    },
+}
+```
+
+### Legacy: PYTHONPATH or vendor approaches
+
+If you prefer not to use pip, cloning with PYTHONPATH or vendoring still works — see `docs/legacy-install.md`.
+
+### Troubleshooting: `evennia migrate` cannot import settings
 
 If you get an import error, check these in order:
 

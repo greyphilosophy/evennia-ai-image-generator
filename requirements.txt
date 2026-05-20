@@ -1,0 +1,13 @@
+# Core dependencies
+httpx>=0.24.0
+
+# Optional: Diffusers backend (requires GPU + CUDA)
+# Uncomment below if you want the Diffusers backend:
+# torch>=2.0.0
+# diffusers>=0.20.0
+# transformers
+# accelerate
+
+# Development / Testing
+pytest>=7.0
+pytest-asyncio
