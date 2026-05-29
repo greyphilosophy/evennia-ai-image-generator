@@ -289,7 +289,7 @@ class ComfyUIBackend(BaseImageBackend):
                     for node_id, node_out in outputs.items():
                         if "images" in node_out:
                             return node_out["images"]
-                    break
+                    # Outputs exist but no images yet — keep polling
             time.sleep(0.5)
 
         raise TimeoutError(
