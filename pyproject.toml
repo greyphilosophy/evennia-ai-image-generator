@@ -37,6 +37,9 @@ diffusers = [
     "transformers",
     "accelerate",
 ]
+flux2_rest = [
+    "httpx>=0.24.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["evennia_ai_image_generator*"]

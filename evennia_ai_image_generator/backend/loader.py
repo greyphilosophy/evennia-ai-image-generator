@@ -52,9 +52,14 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
 
         return ComfyUIBackend(**options)
 
+    if backend_name == "flux2_rest":
+        from .flux2_rest_backend import Flux2RestBackend
+
+        return Flux2RestBackend(**options)
+
     if ":" not in backend_name:
         raise BackendConfigurationError(
-            "Unknown backend. Use 'placeholder', 'diffusers', 'comfyui', "
+            "Unknown backend. Use 'placeholder', 'diffusers', 'comfyui', 'flux2_rest', "
             "or a 'module.path:ClassName' backend path"
         )
 
