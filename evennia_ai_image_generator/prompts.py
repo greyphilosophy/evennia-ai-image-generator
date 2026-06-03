@@ -13,17 +13,6 @@ def build_prompt(context: dict) -> str:
     else:
         base = f"A {subject_type} in a text MUD"
 
-    style_tags = context.get("style_tags") or []
-    mood_tags = context.get("mood_tags") or []
-
-    fragments = []
-    if style_tags:
-        fragments.append("style: " + ", ".join(style_tags))
-    if mood_tags:
-        fragments.append("mood: " + ", ".join(mood_tags))
-
-    if fragments:
-        return f"{base}\n" + "\n".join(fragments)
     return base
 
 
