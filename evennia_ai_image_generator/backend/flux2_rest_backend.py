@@ -73,7 +73,7 @@ class Flux2RestBackend(BaseImageBackend):
 
     def __post_init__(self) -> None:
         self.server_url = self.server_url.rstrip("/")
-        self.output_dir = self.output_dir.strip("/") or "generated"
+        self.output_dir = self.output_dir.rstrip("/") or "generated"
         self.media_url_base = self.media_url_base.rstrip("/")
         self._client = httpx.Client(timeout=self.timeout_s)
 
