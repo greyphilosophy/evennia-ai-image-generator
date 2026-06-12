@@ -29,11 +29,15 @@ class Flux2RestServerNotFound(Flux2RestBackendError):
 
 @dataclass
 class Flux2RestBackend(BaseImageBackend):
-    """FLUX.2 REST API backend for txt2img generation.
+    """FLUX.2 REST API backend for txt2img generation with Turbo LoRA support.
 
-    Talks to a FLUX.2 REST API server (e.g. the FLUX.2-klein-4B server
-    running on port 8190). The server accepts a JSON POST to ``/generate``
-    and returns base64-encoded PNG image data.
+    Talks to a FLUX.2 REST API server (e.g. the FLUX.2-dev server
+    with Turbo LoRA fused, running on port 8190). The server accepts
+    a JSON POST to ``/generate`` and returns base64-encoded PNG image
+    data.
+
+    The ``turbo`` flag is sent to the server, defaulting to ``True``
+    so that the 8-step Turbo LoRA mode is used (~30s per image).
 
     Configuration options:
 
@@ -69,7 +73,7 @@ class Flux2RestBackend(BaseImageBackend):
 
     def __post_init__(self) -> None:
         self.server_url = self.server_url.rstrip("/")
-        self.output_dir = self.output_dir.strip("/") or "generated"
+        self.output_dir = self.output_dir.rstrip("/") or "generated"
         self.media_url_base = self.media_url_base.rstrip("/")
         self._client = httpx.Client(timeout=self.timeout_s)
 
@@ -100,6 +104,7 @@ class Flux2RestBackend(BaseImageBackend):
             "seed": seed,
             "width": request.width or self.default_width,
             "height": request.height or self.default_height,
+            "turbo": True,
         }
 
         # Call the REST endpoint
