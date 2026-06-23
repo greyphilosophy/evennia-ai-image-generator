@@ -43,3 +43,8 @@ flux2_rest = [
 
 [tool.setuptools.packages.find]
 include = ["evennia_ai_image_generator*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that exercise external services or host-application integrations",
+]
