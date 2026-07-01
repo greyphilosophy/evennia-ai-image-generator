@@ -57,10 +57,15 @@ def load_backend(config: dict[str, Any] | None = None) -> BaseImageBackend:
 
         return Flux2RestBackend(**options)
 
+    if backend_name == "openai":
+        from .openai_image_backend import OpenAIImageBackend
+
+        return OpenAIImageBackend(**options)
+
     if ":" not in backend_name:
         raise BackendConfigurationError(
             "Unknown backend. Use 'placeholder', 'diffusers', 'comfyui', 'flux2_rest', "
-            "or a 'module.path:ClassName' backend path"
+            "'openai', or a 'module.path:ClassName' backend path"
         )
 
     module_name, class_name = backend_name.split(":", 1)
